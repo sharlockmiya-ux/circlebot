@@ -1,3 +1,9 @@
+// --- tiny health server for Render ---
+const http = require('http');
+const PORT = process.env.PORT || 10000;
+http.createServer((req, res) => { res.writeHead(200,{'Content-Type':'text/plain'}); res.end('OK'); }).listen(PORT, () => console.log(`✅ Health server on ${PORT}`));
+// --- end tiny health server ---
+
 // ===== CircleBot (CommonJS) =====
 // ログを細かく出すので、どこで止まっているか分かります。
 console.log("Boot: starting bot.js");
