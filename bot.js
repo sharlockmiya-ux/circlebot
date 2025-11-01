@@ -15,7 +15,8 @@ const {
   GatewayIntentBits,
   EmbedBuilder,
   Events,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  MessageFlags, 
 } = require('discord.js');
 require('dotenv').config();
 
@@ -237,41 +238,69 @@ ${SEP}`
   }
 });
 
-// === ボタン押下（ロール付与） ===
+// === ボタン押下：ロール付与/解除（Ephemeralはflags方式、3秒制限対策あり）===
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
-  const def = ROLE_BUTTONS.find(r => r.customId === interaction.customId);
-  if (!def) return;
-
-  const me = await interaction.guild.members.fetchMe();
-  if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-    return interaction.reply({ content: '⚠️ Botに「ロールの管理」権限がありません。', ephemeral: true });
-  }
-
-  const role = interaction.guild.roles.cache.get(def.roleId);
-  if (!role) {
-    return interaction.reply({ content: '⚠️ ロールが見つかりません。', ephemeral: true });
-  }
-
-  const member = interaction.member;
-  const has = member.roles.cache.has(role.id);
-
   try {
-    if (has) {
+    // 3秒制限回避（ここでEphemeral指定：以降はeditReplyでOK）
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    // --- 1) customId から role:<id> を直接読む（推奨フォーマット）
+    let roleId = null;
+    const m = interaction.customId.match(/^role:(\d{17,20})$/);
+    if (m) roleId = m[1];
+
+    // --- 2) 旧来の customId 対応：ROLE_BUTTONS から引く（定義があれば）
+    if (!roleId && typeof ROLE_BUTTONS !== 'undefined') {
+      const def = ROLE_BUTTONS.find(r => r.customId === interaction.customId);
+      if (def) roleId = def.roleId;
+    }
+
+    // customId が不明（古いパネル等）
+    if (!roleId) {
+      await interaction.editReply('⚠️ このボタンは無効になりました。最新のパネルでお試しください。');
+      return;
+    }
+
+    // ロール取得（cache → API）
+    let role = interaction.guild.roles.cache.get(roleId);
+    if (!role) {
+      try { role = await interaction.guild.roles.fetch(roleId); } catch {}
+    }
+    if (!role) {
+      await interaction.editReply('⚠️ ロールが見つかりません。運営に連絡してください。');
+      return;
+    }
+
+    // 権限 & 並び順チェック
+    const me = await interaction.guild.members.fetchMe();
+    if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      await interaction.editReply('⚠️ Botに「ロールの管理」権限がありません。');
+      return;
+    }
+    if (role.position >= me.roles.highest.position) {
+      await interaction.editReply('⚠️ 設定を更新中です。少し待ってから再度お試しください。');
+      return;
+    }
+
+    // 付与 / 解除
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (member.roles.cache.has(role.id)) {
       await member.roles.remove(role);
-      await interaction.reply({ content: `✅ 「${role.name}」を解除しました。`, ephemeral: true });
+      await interaction.editReply(`❎ 「${role.name}」を解除しました。`);
     } else {
       await member.roles.add(role);
-      await interaction.reply({ content: `✅ 「${role.name}」を付与しました。`, ephemeral: true });
+      await interaction.editReply(`✅ 「${role.name}」を付与しました。`);
     }
   } catch (e) {
-    console.error(e);
-    await interaction.reply({ content: '❌ ロール操作に失敗しました。時間をおいて再度お試しください。', ephemeral: true });
+    console.error('interaction error:', e);
+    try {
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply('❌ エラーが発生しました。時間をおいて再度お試しください。');
+      }
+    } catch {}
   }
 });
 
-client.login(TOKEN).catch(err => {
-  console.error("❌ ログイン失敗:", err);
-});
 
