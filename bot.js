@@ -303,4 +303,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+// ===== Botログイン =====
+client.login(TOKEN).catch(err => {
+  console.error("❌ ログイン失敗:", err);
+});
+
 
