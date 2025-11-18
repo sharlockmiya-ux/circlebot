@@ -34,7 +34,6 @@ const path = require('path');
 // 音声ファイル（VC開始時のonline音）
 const VC_ONLINE_SOUND_PATH = path.join(__dirname, 'sounds', 'online.mp3');
 
-
 const TOKEN = process.env.DISCORD_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
