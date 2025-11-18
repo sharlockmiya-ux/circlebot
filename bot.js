@@ -18,10 +18,33 @@ const {
   PermissionFlagsBits,
   MessageFlags, 
 } = require('discord.js');
+
+const {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+  NoSubscriberBehavior,
+} = require('@discordjs/voice');
+
+const path = require('path');
 require('dotenv').config();
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
+
+// ==== VC監視設定 ====
+const VC_LOG_CHANNEL_ID = process.env.VC_LOG_CHANNEL_ID || null;
+const VC_TARGET_CHANNELS = (process.env.VC_TARGET_CHANNELS || '')
+  .split(',')
+  .map(id => id.trim())
+  .filter(id => id.length > 0);
+
+const VC_PLAY_ONLINE_SOUND = (process.env.VC_PLAY_ONLINE_SOUND === 'true');
+const VC_ONLINE_SOUND_PATH = path.join(__dirname, 'sounds', 'online.mp3');
+
+// VCごとの「元のチャンネル名」を覚えておく（0人になったら戻す用）
+const originalVcNames = new Map();
 
 if (!TOKEN || !CHANNEL_ID) {
   console.error("❌ .env に DISCORD_TOKEN または CHANNEL_ID がありません。");
@@ -29,7 +52,11 @@ if (!TOKEN || !CHANNEL_ID) {
 }
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,  // 👈 これを追加
+  ],
 });
 
 // === ロールボタン設定 ===
@@ -398,6 +425,149 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
     } catch {}
+  }
+});
+
+// === VC入室／退出監視（複数VC対応 + Embedログ + REC表示 + オプション音声） ===
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+  // 設定がなければ何もしない
+  if (!VC_TARGET_CHANNELS.length || !VC_LOG_CHANNEL_ID) return;
+
+  const guild = newState.guild || oldState.guild;
+  if (!guild) return;
+
+  const beforeId = oldState.channelId;
+  const afterId = newState.channelId;
+
+  const isTargetBefore = VC_TARGET_CHANNELS.includes(beforeId);
+  const isTargetAfter  = VC_TARGET_CHANNELS.includes(afterId);
+
+  // 監視対象VCに関係ない動きはスキップ
+  if (!isTargetBefore && !isTargetAfter) return;
+
+  const logChannel = guild.channels.cache.get(VC_LOG_CHANNEL_ID);
+  const user = newState.member || oldState.member;
+
+  // Bot自身はスキップ（必要なら外してもOK）
+  if (user && user.user.bot) return;
+
+  // 監視対象VCごとに処理（複数対応）
+  for (const vcId of VC_TARGET_CHANNELS) {
+    const vc = guild.channels.cache.get(vcId);
+    if (!vc || vc.type !== 2) continue; // 2 = ボイスチャンネル
+
+    // 初回は元の名前を覚えておく（0人になったらここに戻す）
+    if (!originalVcNames.has(vc.id)) {
+      originalVcNames.set(vc.id, vc.name);
+    }
+
+    const humanCount = vc.members.filter(m => !m.user.bot).size;
+    const baseName = originalVcNames.get(vc.id) || vc.name;
+
+    // === 1) このVCに「入った」ケース ===
+    if (afterId === vcId && beforeId !== vcId) {
+
+      // 0→1人になった瞬間 = VC開始
+      if (humanCount === 1) {
+        // VC開始Embed
+        if (logChannel?.isTextBased()) {
+          const startEmbed = new EmbedBuilder()
+            .setColor(0x00AEEF)
+            .setTitle('🎧 VC開始')
+            .setDescription(`VC「${baseName}」が開始されました。`)
+            .setTimestamp();
+          await logChannel.send({ embeds: [startEmbed] });
+        }
+
+        // online音声（ON のときだけ & 1人目だけ）
+        if (VC_PLAY_ONLINE_SOUND) {
+          try {
+            const connection = joinVoiceChannel({
+              channelId: vc.id,
+              guildId: vc.guild.id,
+              adapterCreator: vc.guild.voiceAdapterCreator,
+            });
+
+            const player = createAudioPlayer({
+              behaviors: { noSubscriber: NoSubscriberBehavior.Stop },
+            });
+
+            const resource = createAudioResource(VC_ONLINE_SOUND_PATH);
+            player.play(resource);
+            connection.subscribe(player);
+
+            player.once(AudioPlayerStatus.Idle, () => connection.destroy());
+          } catch (err) {
+            console.error('online音声再生エラー:', err);
+          }
+        }
+      }
+
+      // 入室ログ（毎回）
+      if (logChannel?.isTextBased()) {
+        const joinEmbed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('🟢 VC入室')
+          .setDescription(
+            [
+              `${user} が VC「${baseName}」に参加しました。`,
+              `現在：**${humanCount}名**`,
+            ].join('\n')
+          )
+          .setTimestamp();
+        await logChannel.send({ embeds: [joinEmbed] });
+      }
+
+      // チャンネル名を REC 表示に更新
+      try {
+        await vc.setName(`🎙️｜🔴REC：会話中${humanCount}名`);
+      } catch (err) {
+        console.error('VC名変更エラー(入室):', err);
+      }
+    }
+
+    // === 2) このVCから「出た」ケース ===
+    if (beforeId === vcId && afterId !== vcId) {
+      if (humanCount === 0) {
+        // 全員退出 → VC終了
+        if (logChannel?.isTextBased()) {
+          const endEmbed = new EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('🔴 VC終了')
+            .setDescription(`VC「${baseName}」から全員が退出しました。`)
+            .setTimestamp();
+          await logChannel.send({ embeds: [endEmbed] });
+        }
+
+        // チャンネル名を元の名前に戻す
+        try {
+          await vc.setName(baseName);
+        } catch (err) {
+          console.error('VC名変更エラー(終了):', err);
+        }
+      } else {
+        // まだ人がいる → 人数だけ更新（退出ログ付き）
+        if (logChannel?.isTextBased()) {
+          const leaveEmbed = new EmbedBuilder()
+            .setColor(0xFEE75C)
+            .setTitle('🟡 VC退出')
+            .setDescription(
+              [
+                `${user} が VC「${baseName}」から退出しました。`,
+                `現在：**${humanCount}名**`,
+              ].join('\n')
+            )
+            .setTimestamp();
+          await logChannel.send({ embeds: [leaveEmbed] });
+        }
+
+        try {
+          await vc.setName(`🎙️｜🔴REC：会話中${humanCount}名`);
+        } catch (err) {
+          console.error('VC名変更エラー(退出):', err);
+        }
+      }
+    }
   }
 });
 
