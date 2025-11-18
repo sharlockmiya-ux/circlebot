@@ -68,8 +68,9 @@ const IDOL_ROLES = [
 
 const IDOL_ROLE_ID_SET = new Set(IDOL_ROLES.map(r => r.id));
 
-client.once('ready', async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+// v15 対応：'ready' → Events.ClientReady
+client.once(Events.ClientReady, async (clientReady) => {
+  console.log(`✅ Logged in as ${clientReady.user.tag}`);
 
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
@@ -290,7 +291,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // 対応していないボタン
     if (!roleId) {
       await interaction.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: '⚠️ このボタンは現在使用できません。最新のパネルでお試しください。',
       });
       return;
@@ -303,7 +304,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (!role) {
       await interaction.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: '⚠️ ロールが見つかりません。運営に連絡してください。',
       });
       return;
@@ -313,14 +314,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const me = await interaction.guild.members.fetchMe();
     if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
       await interaction.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: '⚠️ Botに「ロールの管理」権限がありません。',
       });
       return;
     }
     if (role.position >= me.roles.highest.position) {
       await interaction.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: '⚠️ ただいまロール設定を更新中です。少し待ってから再度お試しください。',
       });
       return;
@@ -375,14 +376,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         .setFooter({ text: 'ボタンを押すたびに、この一覧も更新されます。' });
 
       await interaction.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: replyText,
         embeds: [embed],
       });
     } else {
       // お知らせロールなど通常ロールはテキストのみ
       await interaction.reply({
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
         content: replyText,
       });
     }
@@ -392,7 +393,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (!interaction.replied) {
         await interaction.reply({
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
           content: '❌ エラーが発生しました。時間をおいて再度お試しください。',
         });
       }
