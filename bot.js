@@ -27,8 +27,13 @@ const {
   NoSubscriberBehavior,
 } = require('@discordjs/voice');
 
-const path = require('path');
+// ===== 環境変数 & パス設定 =====
 require('dotenv').config();
+const path = require('path');
+
+// 音声ファイル（VC開始時のonline音）
+const VC_ONLINE_SOUND_PATH = path.join(__dirname, 'sounds', 'online.mp3');
+
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
@@ -41,7 +46,6 @@ const VC_TARGET_CHANNELS = (process.env.VC_TARGET_CHANNELS || '')
   .filter(id => id.length > 0);
 
 const VC_PLAY_ONLINE_SOUND = (process.env.VC_PLAY_ONLINE_SOUND === 'true');
-const VC_ONLINE_SOUND_PATH = path.join(__dirname, 'sounds', 'online.mp3');
 
 // VCごとの「元のチャンネル名」を覚えておく（0人になったら戻す用）
 const originalVcNames = new Map();
@@ -437,7 +441,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   if (!guild) return;
 
   const beforeId = oldState.channelId;
-  const afterId = newState.channelId;
+  const afterId  = newState.channelId;
 
   const isTargetBefore = VC_TARGET_CHANNELS.includes(beforeId);
   const isTargetAfter  = VC_TARGET_CHANNELS.includes(afterId);
@@ -446,23 +450,23 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   if (!isTargetBefore && !isTargetAfter) return;
 
   const logChannel = guild.channels.cache.get(VC_LOG_CHANNEL_ID);
-  const user = newState.member || oldState.member;
+  const user       = newState.member || oldState.member;
 
-  // Bot自身はスキップ（必要なら外してもOK）
+  // Bot自身はスキップ
   if (user && user.user.bot) return;
 
-  // 監視対象VCごとに処理（複数対応）
+  // 監視対象VCごとに処理
   for (const vcId of VC_TARGET_CHANNELS) {
     const vc = guild.channels.cache.get(vcId);
     if (!vc || vc.type !== 2) continue; // 2 = ボイスチャンネル
 
-    // 初回は元の名前を覚えておく（0人になったらここに戻す）
+    // 元の名前を保存
     if (!originalVcNames.has(vc.id)) {
       originalVcNames.set(vc.id, vc.name);
     }
 
     const humanCount = vc.members.filter(m => !m.user.bot).size;
-    const baseName = originalVcNames.get(vc.id) || vc.name;
+    const baseName   = originalVcNames.get(vc.id) || vc.name;
 
     // === 1) このVCに「入った」ケース ===
     if (afterId === vcId && beforeId !== vcId) {
@@ -481,6 +485,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
         // online音声（ON のときだけ & 1人目だけ）
         if (VC_PLAY_ONLINE_SOUND) {
+          console.log('try play online sound on vc:', vc.id, 'path:', VC_ONLINE_SOUND_PATH);
           try {
             const connection = joinVoiceChannel({
               channelId: vc.id,
@@ -496,7 +501,19 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
             player.play(resource);
             connection.subscribe(player);
 
-            player.once(AudioPlayerStatus.Idle, () => connection.destroy());
+            player.on('error', (err) => {
+              console.error('audio player error:', err);
+            });
+
+            player.once(AudioPlayerStatus.Playing, () => {
+              console.log('online sound: now playing');
+            });
+
+            player.once(AudioPlayerStatus.Idle, () => {
+              console.log('online sound: finished, disconnect');
+              connection.destroy();
+            });
+
           } catch (err) {
             console.error('online音声再生エラー:', err);
           }
@@ -539,7 +556,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
           await logChannel.send({ embeds: [endEmbed] });
         }
 
-        // チャンネル名を元の名前に戻す
+        // チャンネル名を元に戻す
         try {
           await vc.setName(baseName);
         } catch (err) {
