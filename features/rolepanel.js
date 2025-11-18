@@ -7,19 +7,19 @@ const {
 
 // ===== ロール定義（そのまま）=====
 const ROLE_BUTTONS = [
-  { label: '花海咲季', roleId: '1433172645775409313', customId: 'role_hanamizaki' },
-  { label: '月村手毬', roleId: '1433203573339979909', customId: 'role_tsukimura' },
-  { label: '藤田ことね', roleId: '1433205808136589372', customId: 'role_fujita' },
-  { label: '有村麻央', roleId: '1433206251923177513', customId: 'role_arimura' },
-  { label: '葛城リーリヤ', roleId: '1433206385985847407', customId: 'role_katsuragi' },
-  { label: '倉本千奈', roleId: '1433206519217918002', customId: 'role_kuramoto' },
-  { label: '紫雲清夏', roleId: '1433206612281266316', customId: 'role_shiun' },
-  { label: '篠澤広', roleId: '1433206721760854147', customId: 'role_shinozawa' },
-  { label: '姫崎莉波', roleId: '1433206833891508284', customId: 'role_himezaki' },
-  { label: '花海佑芽', roleId: '1433206978066382939', customId: 'role_hanamiyume' },
-  { label: '秦谷美鈴', roleId: '1433207092449382523', customId: 'role_hataya' },
-  { label: '十王星南', roleId: '1433207186749652992', customId: 'role_juuo' },
-  { label: '雨夜燕', roleId: '1433207380010733769', customId: 'role_amayo' }
+  { label: '花海咲季', roleId: '1433209432581341305', customId: 'role_hanamizaki' },
+  { label: '月村手毬', roleId: '1433331636514062447', customId: 'role_tsukimura' },
+  { label: '藤田ことね', roleId: '1433332410623328398', customId: 'role_fujita' },
+  { label: '有村麻央', roleId: '1433332920667476068', customId: 'role_arimura' },
+  { label: '葛城リーリヤ', roleId: '1433333171453169794', customId: 'role_katsuragi' },
+  { label: '倉本千奈', roleId: '1433333415947669534', customId: 'role_kuramoto' },
+  { label: '紫雲清夏', roleId: '1433333595694563429', customId: 'role_shiun' },
+  { label: '篠澤広', roleId: '1433333784270606428', customId: 'role_shinozawa' },
+  { label: '姫崎莉波', roleId: '1433333959378604104', customId: 'role_himezaki' },
+  { label: '花海佑芽', roleId: '1433334170721189989', customId: 'role_hanamiyume' },
+  { label: '秦谷美鈴', roleId: '1433334387252138015', customId: 'role_hataya' },
+  { label: '十王星南', roleId: '1433334591179063316', customId: 'role_juuo' },
+  { label: '雨夜燕', roleId: '1433334807441702952', customId: 'role_amayo' }
 ];
 
 // ===== 一度だけ送る独立プロセス（既存 bot.js に非干渉）=====
@@ -104,4 +104,3 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
-

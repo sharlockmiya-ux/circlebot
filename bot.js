@@ -8,7 +8,7 @@ http.createServer((req, res) => {
 // --- end tiny health server ---
 
 // ===== CircleBot (CommonJS) =====
-console.log("Boot: starting bot.js");
+console.log("Boot: starting bot.js v3");
 
 const {
   Client,
@@ -48,6 +48,25 @@ const ROLE_BUTTONS = [
   { label: '十王星南', roleId: '1433334591179063316', customId: 'role_juuo' },
   { label: '雨夜燕', roleId: '1433334807441702952', customId: 'role_amayo' }
 ];
+
+// === アイドルロール一覧（個別Embed表示用・絵文字なし） ===
+const IDOL_ROLES = [
+  { id: '1433209432581341305', name: '花海咲季' },
+  { id: '1433331636514062447', name: '月村手毬' },
+  { id: '1433332410623328398', name: '藤田ことね' },
+  { id: '1433332920667476068', name: '有村麻央' },
+  { id: '1433333171453169794', name: '葛城リーリヤ' },
+  { id: '1433333415947669534', name: '倉本千奈' },
+  { id: '1433333595694563429', name: '紫雲清夏' },
+  { id: '1433333784270606428', name: '篠澤広' },
+  { id: '1433333959378604104', name: '姫崎莉波' },
+  { id: '1433334170721189989', name: '花海佑芽' },
+  { id: '1433334387252138015', name: '秦谷美鈴' },
+  { id: '1433334591179063316', name: '十王星南' },
+  { id: '1433334807441702952', name: '雨夜燕' }
+];
+
+const IDOL_ROLE_ID_SET = new Set(IDOL_ROLES.map(r => r.id));
 
 client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
@@ -238,66 +257,144 @@ ${SEP}`
   }
 });
 
-// === ボタン押下：ロール付与/解除（Ephemeralはflags方式、3秒制限対策あり）===
+// === ボタン押下：ロール付与/解除（トグル＋ON/OFFボタン＋アイドル個別Embed）===
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
   try {
-    // 3秒制限回避（ここでEphemeral指定：以降はeditReplyでOK）
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    // --- 1) customId から role:<id> を直接読む（推奨フォーマット）
     let roleId = null;
-    const m = interaction.customId.match(/^role:(\d{17,20})$/);
-    if (m) roleId = m[1];
+    let mode = 'toggle'; // 'toggle' | 'on' | 'off'
 
-    // --- 2) 旧来の customId 対応：ROLE_BUTTONS から引く（定義があれば）
+    // デバッグ用：どのボタンが押されたかログに出す
+    console.log('Button pressed:', interaction.customId);
+
+    // --- パターン1: 赤/緑スイッチ用（role_on:<id> / role_off:<id>） ---
+    const mForce = interaction.customId.match(/^role_(on|off):(\d{17,20})$/);
+    if (mForce) {
+      mode = mForce[1] === 'on' ? 'on' : 'off';
+      roleId = mForce[2];
+    }
+
+    // --- パターン2: 新形式トグルボタン（role:<id>） ---
+    if (!roleId) {
+      const m = interaction.customId.match(/^role:(\d{17,20})$/);
+      if (m) roleId = m[1];
+    }
+
+    // --- パターン3: 旧来のカスタムID（ROLE_BUTTONS 定義を使用） ---
     if (!roleId && typeof ROLE_BUTTONS !== 'undefined') {
       const def = ROLE_BUTTONS.find(r => r.customId === interaction.customId);
       if (def) roleId = def.roleId;
     }
 
-    // customId が不明（古いパネル等）
+    // 対応していないボタン
     if (!roleId) {
-      await interaction.editReply('⚠️ このボタンは無効になりました。最新のパネルでお試しください。');
+      await interaction.reply({
+        ephemeral: true,
+        content: '⚠️ このボタンは現在使用できません。最新のパネルでお試しください。',
+      });
       return;
     }
 
-    // ロール取得（cache → API）
+    // ロール取得
     let role = interaction.guild.roles.cache.get(roleId);
     if (!role) {
       try { role = await interaction.guild.roles.fetch(roleId); } catch {}
     }
     if (!role) {
-      await interaction.editReply('⚠️ ロールが見つかりません。運営に連絡してください。');
+      await interaction.reply({
+        ephemeral: true,
+        content: '⚠️ ロールが見つかりません。運営に連絡してください。',
+      });
       return;
     }
 
     // 権限 & 並び順チェック
     const me = await interaction.guild.members.fetchMe();
     if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-      await interaction.editReply('⚠️ Botに「ロールの管理」権限がありません。');
+      await interaction.reply({
+        ephemeral: true,
+        content: '⚠️ Botに「ロールの管理」権限がありません。',
+      });
       return;
     }
     if (role.position >= me.roles.highest.position) {
-      await interaction.editReply('⚠️ 設定を更新中です。少し待ってから再度お試しください。');
+      await interaction.reply({
+        ephemeral: true,
+        content: '⚠️ ただいまロール設定を更新中です。少し待ってから再度お試しください。',
+      });
       return;
     }
 
-    // 付与 / 解除
+    // 対象メンバー & 保持状況
     const member = await interaction.guild.members.fetch(interaction.user.id);
-    if (member.roles.cache.has(role.id)) {
-      await member.roles.remove(role);
-      await interaction.editReply(`❎ 「${role.name}」を解除しました。`);
+    const has = member.roles.cache.has(role.id);
+    const isIdolRole = IDOL_ROLE_ID_SET.has(role.id);
+
+    let replyText = '';
+
+    // ===== モード別の挙動 =====
+    if (mode === 'on') {
+      if (has) {
+        replyText = `✅ すでに「${role.name}」ロールを持っています。`;
+      } else {
+        await member.roles.add(role);
+        replyText = `🟢 「${role.name}」ロールを付与しました。`;
+      }
+    } else if (mode === 'off') {
+      if (!has) {
+        replyText = `ℹ️ もともと「${role.name}」ロールは付与されていません。`;
+      } else {
+        await member.roles.remove(role);
+        replyText = `🔴 「${role.name}」ロールを解除しました。`;
+      }
     } else {
-      await member.roles.add(role);
-      await interaction.editReply(`✅ 「${role.name}」を付与しました。`);
+      if (has) {
+        await member.roles.remove(role);
+        replyText = `❎ 「${role.name}」ロールを解除しました。`;
+      } else {
+        await member.roles.add(role);
+        replyText = `✅ 「${role.name}」ロールを付与しました。`;
+      }
     }
+
+    // ===== アイドルロールの場合は「担当一覧Embed」を付ける =====
+    if (isIdolRole) {
+      const updatedMember = await interaction.guild.members.fetch(interaction.user.id);
+
+      const lines = IDOL_ROLES.map((idol) => {
+        const hasIdol = updatedMember.roles.cache.has(idol.id);
+        const status = hasIdol ? '🟢' : '🔘';
+        return `${status} ${idol.name}`;
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0xff9edb)
+        .setTitle('🎀 あなたの担当アイドル（現在）')
+        .setDescription(lines.join('\n'))
+        .setFooter({ text: 'ボタンを押すたびに、この一覧も更新されます。' });
+
+      await interaction.reply({
+        ephemeral: true,
+        content: replyText,
+        embeds: [embed],
+      });
+    } else {
+      // お知らせロールなど通常ロールはテキストのみ
+      await interaction.reply({
+        ephemeral: true,
+        content: replyText,
+      });
+    }
+
   } catch (e) {
     console.error('interaction error:', e);
     try {
-      if (interaction.deferred && !interaction.replied) {
-        await interaction.editReply('❌ エラーが発生しました。時間をおいて再度お試しください。');
+      if (!interaction.replied) {
+        await interaction.reply({
+          ephemeral: true,
+          content: '❌ エラーが発生しました。時間をおいて再度お試しください。',
+        });
       }
     } catch {}
   }
