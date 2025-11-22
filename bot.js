@@ -49,6 +49,54 @@ const VC_PLAY_ONLINE_SOUND = (process.env.VC_PLAY_ONLINE_SOUND === 'true');
 // VCごとの「元のチャンネル名」を覚えておく（0人になったら戻す用）
 const originalVcNames = new Map();
 
+// === VCログ自動削除（3日経ったログを消す） ===
+const VC_LOG_MESSAGE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
+
+async function cleanupOldVcLogs(client) {
+  if (!VC_LOG_CHANNEL_ID) return;
+
+  try {
+    const channel = await client.channels.fetch(VC_LOG_CHANNEL_ID);
+    if (!channel || !channel.isTextBased()) return;
+
+    const now = Date.now();
+    let fetched;
+
+    do {
+      // 直近100件を取得
+      fetched = await channel.messages.fetch({ limit: 100 });
+
+      const targets = fetched.filter((m) => {
+        // Bot自身のメッセージのみ
+        if (m.author.id !== client.user.id) return false;
+        // 3日より新しいものは残す
+        if (m.createdTimestamp > now - VC_LOG_MESSAGE_MAX_AGE_MS) return false;
+        // Embedが無いものはスキップ
+        if (!m.embeds || m.embeds.length === 0) return false;
+
+        const title = m.embeds[0].title ?? '';
+
+        // VCログ用のタイトルだけを対象にする
+        return (
+          title.startsWith('🎧 VC開始') ||
+          title.startsWith('🔴 VC終了') ||
+          title.startsWith('🟢 VC入室') ||
+          title.startsWith('🟡 VC退出')
+        );
+      });
+
+      if (targets.size === 0) break;
+
+      await channel.bulkDelete(targets, true);
+      console.log(`🧹 VCログ自動削除: ${targets.size}件削除しました`);
+
+      // 100件以上古いメッセージがある場合は、もう一度ループ
+    } while (fetched.size === 100);
+  } catch (err) {
+    console.error('VCログ自動削除エラー:', err);
+  }
+}
+
 if (!TOKEN || !CHANNEL_ID) {
   console.error("❌ .env に DISCORD_TOKEN または CHANNEL_ID がありません。");
   process.exit(1);
@@ -102,6 +150,10 @@ const IDOL_ROLE_ID_SET = new Set(IDOL_ROLES.map(r => r.id));
 client.once(Events.ClientReady, async (clientReady) => {
   console.log(`✅ Logged in as ${clientReady.user.tag}`);
 
+  // === VCログ自動削除 ===
+  setInterval(() => cleanupOldVcLogs(client), 3 * 60 * 60 * 1000);
+  cleanupOldVcLogs(client);
+  
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
     if (!channel) return console.error("❌ チャンネルが見つかりません。");
