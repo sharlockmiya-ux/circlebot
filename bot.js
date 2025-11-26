@@ -194,7 +194,7 @@ client.once(Events.ClientReady, async (clientReady) => {
 当サークルと一定の交流関係を有する提携団体です。  
 
 📎 **【合同サーバーURL】**  
-➡️ [サーバーに参加する](https://discord.gg/BhA3PWd4)
+➡️ [サーバーに参加する](https://discord.gg/XWHyHxkJGn)
 
 本サーバーへの参加は任意としますが、以下の規則を遵守してください。  
 
