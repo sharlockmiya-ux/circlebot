@@ -1033,7 +1033,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const embed = new EmbedBuilder()
           .setTitle(summary.title + '（直近5シーズン）')
           .setDescription(summary.description)
-          .setColor(0xff4d4d);
+          .setColor(0x22c55e);
 
         // 1024文字制限を考慮して分割
         let current = '';
@@ -1080,7 +1080,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const embed = new EmbedBuilder()
           .setTitle(summary.title + '（全期間）')
           .setDescription(summary.description)
-          .setColor(0xff4d4d);
+          .setColor(0x6366f1);
 
         // 文字数制限を考慮して分割
         let current = '';
