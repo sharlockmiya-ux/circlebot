@@ -1,97 +1,110 @@
 // data/motiSheetStore.js
+// Google Sheets 連携：サービスアカウントで「記録」シートを読み書き
+
 const { google } = require('googleapis');
 
-// ===== 環境変数の読み込み =====
+// ===== 環境変数の取得 =====
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-let PRIVATE_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+const SERVICE_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+const RAW_PRIVATE_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
-// デバッグ用ログ（中身そのものは出さない）
-console.log('[moti] env check:',
-  'sheet:', !!SPREADSHEET_ID,
-  'email:', !!SERVICE_ACCOUNT_EMAIL,
-  'keyLen:', PRIVATE_KEY ? PRIVATE_KEY.length : 0,
-);
+// .env では \n で書いている想定なので、実行時に本物の改行に変換
+const PRIVATE_KEY = RAW_PRIVATE_KEY
+  ? RAW_PRIVATE_KEY.replace(/\\n/g, '\n')
+  : undefined;
 
-// Render / .env で `\n` 付き 1 行文字列になっている場合に改行に戻す
-if (PRIVATE_KEY && PRIVATE_KEY.includes('\\n')) {
-  PRIVATE_KEY = PRIVATE_KEY.replace(/\\n/g, '\n');
+// 起動時に最低限のチェックだけしておく（秘密情報は出さない）
+if (!SPREADSHEET_ID || !SERVICE_EMAIL || !PRIVATE_KEY) {
+  console.error('[motiSheetStore] ❌ 環境変数が足りません');
+  console.error('[motiSheetStore] SPREADSHEET_ID:', !!SPREADSHEET_ID);
+  console.error('[motiSheetStore] GOOGLE_SERVICE_ACCOUNT_EMAIL:', !!SERVICE_EMAIL);
+  console.error('[motiSheetStore] GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:', !!PRIVATE_KEY);
 }
 
-// ===== Google 認証クライアント作成 =====
+// ===== Google Sheets クライアント作成 =====
 const auth = new google.auth.JWT(
-  SERVICE_ACCOUNT_EMAIL,
-  undefined,
+  SERVICE_EMAIL,
+  null,
   PRIVATE_KEY,
-  ['https://www.googleapis.com/auth/spreadsheets'],
+  ['https://www.googleapis.com/auth/spreadsheets']
 );
 
-const sheets = google.sheets('v4');
+const sheets = google.sheets({ version: 'v4', auth });
 
-// 1行レコードに変換
-function toRecord(row) {
-  if (!row || row.length < 6) return null;
-  const [userId, username, timestamp, rank, grow, season] = row;
-  return {
-    userId,
-    username,
-    timestamp: new Date(timestamp),
-    rank: Number(rank) || 0,
-    grow: Number(grow) || 0,
-    season: season || '',
-  };
+// ===== 共通：シートから全行を取得してオブジェクト配列に変換 =====
+async function fetchAllRecords() {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: '記録!A:F', // userId | username | timestamp | rank | grow | season
+  });
+
+  const values = res.data.values || [];
+
+  // 1行目はヘッダーなのでスキップ
+  const rows = values.slice(1);
+
+  return rows.map((row) => {
+    const [
+      userId = '',
+      username = '',
+      timestamp = '',
+      rank = '',
+      grow = '',
+      season = '',
+    ] = row;
+
+    return {
+      userId,
+      username,
+      timestamp: new Date(timestamp),
+      rank: Number(rank),
+      grow: Number(grow),
+      season: season || '',
+    };
+  });
 }
 
-// ====== 1件追記 ======
+// ===== 1件追加（/moti_input 用） =====
 async function appendRecord(userId, username, rank, grow, season) {
-  if (!SPREADSHEET_ID) {
-    throw new Error('SPREADSHEET_ID が設定されていません');
-  }
+  const timestamp = new Date().toISOString();
 
-  const now = new Date().toISOString();
-  const values = [[String(userId), username, now, rank, grow, season]];
+  const values = [[
+    String(userId),
+    String(username),
+    timestamp,
+    Number(rank),
+    Number(grow),
+    String(season || ''),
+  ]];
 
   await sheets.spreadsheets.values.append({
-    auth,
     spreadsheetId: SPREADSHEET_ID,
     range: '記録!A:F',
     valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
     requestBody: { values },
   });
 }
 
-// ====== 全レコード取得 ======
-async function getAllRecords(season) {
-  if (!SPREADSHEET_ID) {
-    throw new Error('SPREADSHEET_ID が設定されていません');
-  }
-
-  const res = await sheets.spreadsheets.values.get({
-    auth,
-    spreadsheetId: SPREADSHEET_ID,
-    range: '記録!A:F',
+// ===== 指定ユーザーの記録全件（/moti_me 用） =====
+async function getRecordsByUser(userId, season) {
+  const all = await fetchAllRecords();
+  return all.filter((r) => {
+    if (String(r.userId) !== String(userId)) return false;
+    if (season && r.season !== season) return false;
+    return true;
   });
-
-  const rows = res.data.values || [];
-  // 1 行目はヘッダー想定
-  const dataRows = rows.slice(1);
-  let records = dataRows.map(toRecord).filter(Boolean);
-
-  if (season) {
-    records = records.filter(r => r.season === season);
-  }
-
-  return records;
 }
 
-// ====== 特定ユーザーのレコード取得 ======
-async function getRecordsByUser(userId, season) {
-  const all = await getAllRecords(season);
-  return all.filter(r => r.userId === String(userId));
+// ===== 指定シーズンの全メンバー記録（/moti_report, /moti_notion 用） =====
+async function getAllRecords(season) {
+  const all = await fetchAllRecords();
+  if (!season) return all;
+  return all.filter((r) => r.season === season);
 }
 
 module.exports = {
   appendRecord,
-  getAllRecords,
   getRecordsByUser,
+  getAllRecords,
 };
