@@ -728,31 +728,44 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const seasonLabel = season || '全期間';
 
       // /moti_input → モーダル表示
-      if (commandName === 'moti_input') {
-        const modal = new ModalBuilder()
-          .setCustomId(`motiInputModal:${season}`)
-          .setTitle(`モチベ記録入力（${season}）`);
+if (commandName === 'moti_input') {
+  // ↑ですでに optionSeason / season / seasonLabel が計算されているので再利用します
 
-        const rankInput = new TextInputBuilder()
-          .setCustomId('rank')
-          .setLabel('現在の順位（数字のみ）')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true);
+  const modal = new ModalBuilder()
+    .setCustomId('motiInputModal') // season はカスタムIDではなく入力欄で受け取る
+    .setTitle(`モチベ記録入力（${seasonLabel}）`);
 
-        const growInput = new TextInputBuilder()
-          .setCustomId('grow')
-          .setLabel('現在の育成数（数字のみ）')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true);
+  // シーズン入力（空欄なら現在シーズン扱い）
+  const seasonInput = new TextInputBuilder()
+    .setCustomId('season')
+    .setLabel('シーズン（例: S35）※未入力なら現在シーズン')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder(season || 'S35');
 
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(rankInput),
-          new ActionRowBuilder().addComponents(growInput),
-        );
+  const rankInput = new TextInputBuilder()
+    .setCustomId('rank')
+    .setLabel('現在の順位（数字のみ）')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('例: 3');
 
-        await interaction.showModal(modal);
-        return;
-      }
+  const growInput = new TextInputBuilder()
+    .setCustomId('grow')
+    .setLabel('現在の育成数（数字のみ）')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('例: 1252');
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(seasonInput),
+    new ActionRowBuilder().addComponents(rankInput),
+    new ActionRowBuilder().addComponents(growInput),
+  );
+
+  await interaction.showModal(modal);
+  return;
+}
 
       // /moti_me → 自分の推移
       if (commandName === 'moti_me') {
@@ -1074,29 +1087,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // ===== モーダル送信（/moti_input のフォーム） =====
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('motiInputModal')) {
-      const rank = parseInt(interaction.fields.getTextInputValue('rank'), 10);
-      const grow = parseInt(interaction.fields.getTextInputValue('grow'), 10);
+    if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
+  const seasonInput = interaction.fields.getTextInputValue('season').trim();
+  const season = seasonInput || CURRENT_SEASON; // 空なら現在シーズン
 
-      if (Number.isNaN(rank) || Number.isNaN(grow)) {
-        await interaction.reply({
-          content: '数字を入力してください。',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
+  const rank = parseInt(interaction.fields.getTextInputValue('rank'), 10);
+  const grow = parseInt(interaction.fields.getTextInputValue('grow'), 10);
 
-      const parts = interaction.customId.split(':');
-      const season = parts[1] || CURRENT_SEASON;
+  if (Number.isNaN(rank) || Number.isNaN(grow)) {
+    await interaction.reply({
+      content: '順位と育成数には数字を入力してください。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
-      await appendRecord(interaction.user.id, interaction.user.username, rank, grow, season);
+  await appendRecord(interaction.user.id, interaction.user.username, rank, grow, season);
 
-      await interaction.reply({
-        content: `✅ 記録しました。\nシーズン: ${season}\n順位: ${rank}\n育成数: ${grow}`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+  await interaction.reply({
+    content: `✅ 記録しました。\nシーズン: ${season}\n順位: ${rank}\n育成数: ${grow}`,
+    flags: MessageFlags.Ephemeral,
+  });
+  return;
+}
+
 } catch (err) {
   console.error('moti interaction error:', err);
 
