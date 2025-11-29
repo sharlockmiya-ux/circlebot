@@ -285,7 +285,7 @@ const client = new Client({
   ],
 });
 
-function scheduleMotiReminder(client) {
+function setupMotiMonthlyReminder(client) {
   // 毎月1日 10:00 に実行（必要ならここはお好みで変更OK）
   cron.schedule(
     '0 10 1 * *',
