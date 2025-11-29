@@ -38,14 +38,16 @@ if (!SPREADSHEET_ID || !SERVICE_EMAIL || !PRIVATE_KEY) {
 
 
 // ===== Google Sheets クライアント作成 =====
-const auth = new google.auth.JWT(
-  SERVICE_EMAIL,
-  null,
-  PRIVATE_KEY,
-  ['https://www.googleapis.com/auth/spreadsheets']
-);
+const auth = new google.auth.GoogleAuth({
+  credentials: {
+    client_email: SERVICE_EMAIL,
+    private_key: PRIVATE_KEY,
+  },
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
 
 const sheets = google.sheets({ version: 'v4', auth });
+
 
 // ===== 共通：シートから全行を取得してオブジェクト配列に変換 =====
 async function fetchAllRecords() {
