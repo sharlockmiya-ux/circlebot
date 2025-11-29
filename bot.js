@@ -722,52 +722,52 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       const { commandName } = interaction;
 
-      // 共通：season 指定
+      // 共通: season / seasonLabel（/moti_input 以外で使う）
       const optionSeason = interaction.options.getString('season');
       const season = optionSeason || CURRENT_SEASON;
       const seasonLabel = season || '全期間';
 
-      // /moti_input → モーダル表示
-if (commandName === 'moti_input') {
-  // ↑ですでに optionSeason / season / seasonLabel が計算されているので再利用します
+      // ---------- /moti_input → モーダル表示 ----------
+      if (commandName === 'moti_input') {
+        const modal = new ModalBuilder()
+          .setCustomId('motiInputModal') // シーズンは customId ではなくフィールドで持つ
+          .setTitle('モチベ記録入力');
 
-  const modal = new ModalBuilder()
-    .setCustomId('motiInputModal') // season はカスタムIDではなく入力欄で受け取る
-    .setTitle(`モチベ記録入力（${seasonLabel}）`);
+        // シーズン入力欄
+        const seasonInput = new TextInputBuilder()
+          .setCustomId('season')
+          .setLabel('対象シーズン（例: S35）※空欄なら現在シーズン')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setPlaceholder('S35');
 
-  // シーズン入力（空欄なら現在シーズン扱い）
-  const seasonInput = new TextInputBuilder()
-    .setCustomId('season')
-    .setLabel('シーズン（例: S35）※未入力なら現在シーズン')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setPlaceholder(season || 'S35');
+        // 順位
+        const rankInput = new TextInputBuilder()
+          .setCustomId('rank')
+          .setLabel('現在の順位（数字のみ）')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setPlaceholder('例: 3');
 
-  const rankInput = new TextInputBuilder()
-    .setCustomId('rank')
-    .setLabel('現在の順位（数字のみ）')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setPlaceholder('例: 3');
+        // 育成数
+        const growInput = new TextInputBuilder()
+          .setCustomId('grow')
+          .setLabel('現在の育成数（数字のみ）')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setPlaceholder('例: 1252');
 
-  const growInput = new TextInputBuilder()
-    .setCustomId('grow')
-    .setLabel('現在の育成数（数字のみ）')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setPlaceholder('例: 1252');
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(seasonInput),
+          new ActionRowBuilder().addComponents(rankInput),
+          new ActionRowBuilder().addComponents(growInput),
+        );
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(seasonInput),
-    new ActionRowBuilder().addComponents(rankInput),
-    new ActionRowBuilder().addComponents(growInput),
-  );
+        await interaction.showModal(modal);
+        return;
+      }
 
-  await interaction.showModal(modal);
-  return;
-}
-
-      // /moti_me → 自分の推移
+      // ---------- /moti_me → 自分の推移 ----------
       if (commandName === 'moti_me') {
         const userId = interaction.user.id;
         const myRecords = await getRecordsByUser(userId, season);
@@ -848,7 +848,7 @@ if (commandName === 'moti_input') {
         return;
       }
 
-      // /moti_report → 全員分（運営専用）
+      // ---------- /moti_report → 全員分（運営専用） ----------
       if (commandName === 'moti_report') {
         const member = interaction.member;
         if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -937,7 +937,7 @@ if (commandName === 'moti_input') {
         return;
       }
 
-      // /moti_notion → Notion用表（運営専用）
+      // ---------- /moti_notion → Notion用表（運営専用） ----------
       if (commandName === 'moti_notion') {
         const member = interaction.member;
         if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -1013,7 +1013,7 @@ if (commandName === 'moti_input') {
         return;
       }
 
-      // 使い方ガイド
+      // ---------- /moti_help → ガイド送信 ----------
       if (commandName === 'moti_help') {
         const member = interaction.member;
         if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -1088,50 +1088,48 @@ if (commandName === 'moti_input') {
 
     // ===== モーダル送信（/moti_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
-  const seasonInput = interaction.fields.getTextInputValue('season').trim();
-  const season = seasonInput || CURRENT_SEASON; // 空なら現在シーズン
+      const seasonInput = interaction.fields.getTextInputValue('season').trim();
+      const season = seasonInput || CURRENT_SEASON; // 空なら現在シーズン
 
-  const rank = parseInt(interaction.fields.getTextInputValue('rank'), 10);
-  const grow = parseInt(interaction.fields.getTextInputValue('grow'), 10);
+      const rank = parseInt(interaction.fields.getTextInputValue('rank'), 10);
+      const grow = parseInt(interaction.fields.getTextInputValue('grow'), 10);
 
-  if (Number.isNaN(rank) || Number.isNaN(grow)) {
-    await interaction.reply({
-      content: '順位と育成数には数字を入力してください。',
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
+      if (Number.isNaN(rank) || Number.isNaN(grow)) {
+        await interaction.reply({
+          content: '数字を入力してください。',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
 
-  await appendRecord(interaction.user.id, interaction.user.username, rank, grow, season);
+      await appendRecord(interaction.user.id, interaction.user.username, rank, grow, season);
 
-  await interaction.reply({
-    content: `✅ 記録しました。\nシーズン: ${season}\n順位: ${rank}\n育成数: ${grow}`,
-    flags: MessageFlags.Ephemeral,
-  });
-  return;
-}
-
-} catch (err) {
-  console.error('moti interaction error:', err);
-
-  const msg = 'エラーが発生しました。時間をおいて再度お試しください。';
-
-  try {
-    if (interaction.deferred || interaction.replied) {
-      // すでに defer / reply 済み → editReply で上書き
-      await interaction.editReply({ content: msg });
-    } else {
-      // まだ返していない → ここで一度だけ reply
       await interaction.reply({
-        content: msg,
-        flags: MessageFlags.Ephemeral, 
+        content: `✅ 記録しました。\nシーズン: ${season}\n順位: ${rank}\n育成数: ${grow}`,
+        flags: MessageFlags.Ephemeral,
       });
+      return;
     }
-  } catch (replyErr) {
-    console.error('moti error reply failed:', replyErr);
+  } catch (err) {
+    console.error('moti interaction error:', err);
+
+    const msg = 'エラーが発生しました。時間をおいて再度お試しください。';
+
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: msg });
+      } else {
+        await interaction.reply({
+          content: msg,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    } catch (replyErr) {
+      console.error('moti error reply failed:', replyErr);
+    }
   }
-}
 });
+
 
 
 
@@ -1141,3 +1139,4 @@ client.login(TOKEN).catch(err => {
 });
 
 
+ 
