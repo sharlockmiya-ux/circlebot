@@ -4,14 +4,19 @@
   "main": "bot.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node bot.js"
-  },
+  "start": "node bot.js",
+  "deploy:moti": "node scripts/deployMotiCommands.js"
+},
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.0",
     "discord.js": "^14.15.2",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "googleapis": "^166.0.0",
+    "node-cron": "^4.2.1"
+    
   }
 }
+

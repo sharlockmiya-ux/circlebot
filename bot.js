@@ -10,14 +10,36 @@ http.createServer((req, res) => {
 // ===== CircleBot (CommonJS) =====
 console.log("Boot: starting bot.js v3");
 
+// ① dotenv はここで1回だけ呼ぶ
+require('dotenv').config();
+
+// ② discord.js の import を「拡張」する
 const {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   Events,
   PermissionFlagsBits,
-  MessageFlags, 
+  MessageFlags,
 } = require('discord.js');
+
+// ③ 追加ライブラリ
+const cron = require('node-cron');
+
+const {
+  appendRecord,
+  getAllRecords,
+  getRecordsByUser,
+} = require('./data/motiSheetStore');
+
+const CURRENT_SEASON = process.env.MOTI_CURRENT_SEASON || 'S35';
+const MOTI_NOTICE_CHANNEL_ID = process.env.MOTI_NOTICE_CHANNEL_ID;
 
 const {
   joinVoiceChannel,
@@ -110,6 +132,59 @@ const client = new Client({
   ],
 });
 
+function setupMotiMonthlyReminder(client) {
+  // 毎月1日 9:00（日本時間）
+  cron.schedule(
+    '0 9 1 * *',
+    async () => {
+      try {
+        const channel = await client.channels.fetch(MOTI_NOTICE_CHANNEL_ID);
+        if (!channel || !channel.isTextBased()) {
+          console.warn('[moti reminder] 通知表チャンネルを取得できませんでした。');
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('📅 月初リマインダー：成績通知表の提出')
+          .setDescription(
+            '新しい月になりました。今月分の成績通知表の記入をお願いします。\n' +
+            '以下の手順で、今月最初の記録を登録してください。'
+          )
+          .addFields(
+            {
+              name: '1️⃣ `/moti_input` で記録',
+              value:
+                '・今の順位と育成数を、シーズン（例: `S35`）を確認して記録してください。\n' +
+                '・シーズンが切り替わっている場合は、運営から案内されたシーズン名を `season:` に指定してください。',
+            },
+            {
+              name: '2️⃣ 自分の推移確認（任意）',
+              value:
+                '・`/moti_me` を使うと、前の月までの推移を振り返ることができます。',
+            },
+            {
+              name: '⏱️ このリマインダーについて',
+              value:
+                '・このメッセージは、3日後に自動で削除されます。',
+            },
+          );
+
+        const msg = await channel.send({ content: '@everyone', embeds: [embed] });
+
+        // 3日後に自動削除
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        setTimeout(() => {
+          msg.delete().catch(() => {});
+        }, threeDaysMs);
+      } catch (err) {
+        console.error('[moti reminder] 送信中にエラー:', err);
+      }
+    },
+    { timezone: 'Asia/Tokyo' }
+  );
+}
+
+
 // === ロールボタン設定 ===
 const ROLE_BUTTONS = [
   { label: '花海咲季', roleId: '1433209432581341305', customId: 'role_hanamizaki' },
@@ -149,6 +224,8 @@ const IDOL_ROLE_ID_SET = new Set(IDOL_ROLES.map(r => r.id));
 // v15 対応：'ready' → Events.ClientReady
 client.once(Events.ClientReady, async (clientReady) => {
   console.log(`✅ Logged in as ${clientReady.user.tag}`);
+
+  setupMotiMonthlyReminder(c);
 
   // === VCログ自動削除 ===
   setInterval(() => cleanupOldVcLogs(client), 3 * 60 * 60 * 1000);
@@ -638,6 +715,401 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
   }
 });
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  try {
+    // ===== スラッシュコマンド =====
+    if (interaction.isChatInputCommand()) {
+      const { commandName } = interaction;
+
+      // 共通：season 指定
+      const optionSeason = interaction.options.getString('season');
+      const season = optionSeason || CURRENT_SEASON;
+      const seasonLabel = season || '全期間';
+
+      // /moti_input → モーダル表示
+      if (commandName === 'moti_input') {
+        const modal = new ModalBuilder()
+          .setCustomId(`motiInputModal:${season}`)
+          .setTitle(`モチベ記録入力（${season}）`);
+
+        const rankInput = new TextInputBuilder()
+          .setCustomId('rank')
+          .setLabel('現在の順位（数字のみ）')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        const growInput = new TextInputBuilder()
+          .setCustomId('grow')
+          .setLabel('現在の育成数（数字のみ）')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(rankInput),
+          new ActionRowBuilder().addComponents(growInput),
+        );
+
+        await interaction.showModal(modal);
+        return;
+      }
+
+      // /moti_me → 自分の推移
+      if (commandName === 'moti_me') {
+        const userId = interaction.user.id;
+        const myRecords = await getRecordsByUser(userId, season);
+
+        if (!myRecords.length) {
+          await interaction.reply({
+            content: `${seasonLabel} の記録がまだありません。/moti_input で記録を追加してください。`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        myRecords.sort((a, b) => a.timestamp - b.timestamp);
+        const latest = myRecords.slice(-10);
+        const rankHistory = latest.map(r => r.rank);
+        const growHistory = latest.map(r => r.grow);
+
+        const lastRank = rankHistory[rankHistory.length - 1];
+        const prevRank = rankHistory[rankHistory.length - 2] ?? lastRank;
+
+        const lastGrow = growHistory[growHistory.length - 1];
+        const prevGrow = growHistory[growHistory.length - 2] ?? lastGrow;
+
+        const rankDiff = lastRank - prevRank;
+        const growDiff = lastGrow - prevGrow;
+
+        // 平均との比較
+        const allRecords = await getAllRecords(season);
+        const byUser = new Map();
+        for (const r of allRecords) {
+          if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+          byUser.get(r.userId).push(r);
+        }
+
+        const latestDeltas = [];
+        for (const recs of byUser.values()) {
+          recs.sort((a, b) => a.timestamp - b.timestamp);
+          if (recs.length >= 2) {
+            const last = recs[recs.length - 1];
+            const prev = recs[recs.length - 2];
+            latestDeltas.push(last.grow - prev.grow);
+          }
+        }
+
+        const avgDelta = latestDeltas.length
+          ? latestDeltas.reduce((a, b) => a + b, 0) / latestDeltas.length
+          : 0;
+
+        const diffFromAvg = growDiff - avgDelta;
+
+        const growMark =
+          diffFromAvg > 0 ? '🔺' :
+          diffFromAvg < 0 ? '🔻' :
+          '➖';
+
+        const embed = new EmbedBuilder()
+          .setTitle(`📊 ${seasonLabel} の ${interaction.user.username} さんの成績推移`)
+          .setDescription('最新10回分の記録です。')
+          .addFields(
+            {
+              name: '順位推移',
+              value:
+                `${rankHistory.join(' → ')}\n` +
+                `直近変化: ${rankDiff >= 0 ? '+' : ''}${rankDiff}`,
+            },
+            {
+              name: '育成数推移',
+              value:
+                `${prevGrow} → ${lastGrow}\n` +
+                `直近増加: +${growDiff}（平均 ${avgDelta.toFixed(1)}）${growMark}`,
+            },
+          );
+
+        await interaction.reply({
+          embeds: [embed],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // /moti_report → 全員分（運営専用）
+      if (commandName === 'moti_report') {
+        const member = interaction.member;
+        if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+          await interaction.reply({
+            content: 'このコマンドは運営のみ実行できます。',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const records = await getAllRecords(season);
+        if (!records.length) {
+          await interaction.reply({
+            content: `${seasonLabel} の記録がまだありません。`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const byUser = new Map();
+        for (const r of records) {
+          if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+          byUser.get(r.userId).push(r);
+        }
+
+        const latestDeltas = [];
+        for (const recs of byUser.values()) {
+          recs.sort((a, b) => a.timestamp - b.timestamp);
+          if (recs.length >= 2) {
+            const last = recs[recs.length - 1];
+            const prev = recs[recs.length - 2];
+            latestDeltas.push(last.grow - prev.grow);
+          }
+        }
+
+        const avgDelta = latestDeltas.length
+          ? latestDeltas.reduce((a, b) => a + b, 0) / latestDeltas.length
+          : 0;
+
+        const embed = new EmbedBuilder()
+          .setTitle(`今週の成績推移レポート（${seasonLabel}）`)
+          .setDescription('各メンバーの順位・育成数の直近推移と平均との差をまとめています。');
+
+        for (const [userId, recs] of byUser.entries()) {
+          recs.sort((a, b) => a.timestamp - b.timestamp);
+          const latest = recs.slice(-10);
+
+          const username = latest[latest.length - 1].username ?? 'Unknown';
+
+          const ranks = latest.map(r => r.rank);
+          const grows = latest.map(r => r.grow);
+
+          const lastRank = ranks[ranks.length - 1];
+          const prevRank = ranks[ranks.length - 2] ?? lastRank;
+
+          const lastGrow = grows[grows.length - 1];
+          const prevGrow = grows[grows.length - 2] ?? lastGrow;
+
+          const rankDiff = lastRank - prevRank;
+          const growDiff = lastGrow - prevGrow;
+          const diffFromAvg = growDiff - avgDelta;
+
+          const growMark =
+            diffFromAvg > 0 ? '🔺' :
+            diffFromAvg < 0 ? '🔻' :
+            '➖';
+
+          const rankText = ranks.join(' → ');
+          const growText = `${prevGrow} → ${lastGrow}`;
+
+          embed.addFields({
+            name: `🎤 ${username}`,
+            value:
+              `順位: ${rankText}\n` +
+              `　┗ 直近変化: ${rankDiff >= 0 ? '+' : ''}${rankDiff}\n\n` +
+              `育成数: ${growText}\n` +
+              `　┗ 直近増加: +${growDiff}（平均 ${avgDelta.toFixed(1)}）${growMark}`,
+            inline: false,
+          });
+        }
+
+        await interaction.reply({
+          embeds: [embed],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // /moti_notion → Notion用表（運営専用）
+      if (commandName === 'moti_notion') {
+        const member = interaction.member;
+        if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+          await interaction.reply({
+            content: 'このコマンドは運営のみ実行できます。',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const records = await getAllRecords(season);
+        if (!records.length) {
+          await interaction.reply({
+            content: `${seasonLabel} の記録がまだありません。`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const byUser = new Map();
+        for (const r of records) {
+          if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+          byUser.get(r.userId).push(r);
+        }
+
+        const latestDeltas = [];
+        for (const recs of byUser.values()) {
+          recs.sort((a, b) => a.timestamp - b.timestamp);
+          if (recs.length >= 2) {
+            const last = recs[recs.length - 1];
+            const prev = recs[recs.length - 2];
+            latestDeltas.push(last.grow - prev.grow);
+          }
+        }
+
+        const avgDelta = latestDeltas.length
+          ? latestDeltas.reduce((a, b) => a + b, 0) / latestDeltas.length
+          : 0;
+
+        let notionTable =
+          '| メンバー | 順位推移 | 最終順位 | 直近順位変化 | 育成数推移 | 直近増加数 | 増加数平均との差 |\n' +
+          '|---------|----------|----------|--------------|------------|------------|-----------------|\n';
+
+        for (const [userId, recs] of byUser.entries()) {
+          recs.sort((a, b) => a.timestamp - b.timestamp);
+          const latest = recs.slice(-10);
+
+          const username = latest[latest.length - 1].username ?? 'Unknown';
+
+          const ranks = latest.map(r => r.rank);
+          const grows = latest.map(r => r.grow);
+
+          const lastRank = ranks[ranks.length - 1];
+          const prevRank = ranks[ranks.length - 2] ?? lastRank;
+
+          const lastGrow = grows[grows.length - 1];
+          const prevGrow = grows[grows.length - 2] ?? lastGrow;
+
+          const rankDiff = lastRank - prevRank;
+          const growDiff = lastGrow - prevGrow;
+          const diffFromAvg = growDiff - avgDelta;
+
+          const rankText = ranks.join(' → ');
+          const growText = `${prevGrow} → ${lastGrow}`;
+
+          notionTable += `| ${username} | ${rankText} | ${lastRank}位 | ${rankDiff >= 0 ? '+' : ''}${rankDiff} | ${growText} | +${growDiff} | ${diffFromAvg >= 0 ? '+' : ''}${diffFromAvg.toFixed(1)} |\n`;
+        }
+
+        await interaction.reply({
+          content: '```markdown\n' + notionTable + '\n```',
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // /moti_help → 使い方ガイド
+      if (commandName === 'moti_help') {
+        const member = interaction.member;
+        if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+          await interaction.reply({
+            content: 'このコマンドは運営のみ実行できます。',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const channel = await interaction.client.channels.fetch(MOTI_NOTICE_CHANNEL_ID);
+        if (!channel || !channel.isTextBased()) {
+          await interaction.reply({
+            content: '通知表チャンネルを取得できませんでした。MOTI_NOTICE_CHANNEL_ID を確認してください。',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('📊 成績通知表システムの使い方')
+          .setDescription(
+            'このチャンネルでは、各自の順位・育成数の推移を記録し、振り返りに活用します。\n' +
+            '以下のコマンドは、基本的に各自が自分の成績を管理するためのものです。'
+          )
+          .addFields(
+            {
+              name: '1️⃣ 記録の登録 `/moti_input`',
+              value:
+                '・自分の現在の順位と育成数を記録します。\n' +
+                '・コマンドを実行すると入力フォームが表示されますので、数字を入力して送信してください。\n' +
+                '・`season` オプションを指定すると、特定シーズン（例: `S35`）の記録として保存されます。\n' +
+                '　（省略時は現在のシーズンとして記録されます）',
+            },
+            {
+              name: '2️⃣ 自分の推移の確認 `/moti_me`',
+              value:
+                '・自分の記録だけを集計し、最新10件分の順位・育成数の推移を表示します。\n' +
+                '・`season` オプションで対象シーズンを指定できます（例: `/moti_me season:S35`）。\n' +
+                '・表示される育成数には、全員の平均増加量との比較も含まれます。\n' +
+                '　例：`直近増加: +138（平均 +95.0）🔺`',
+            },
+            {
+              name: '3️⃣ 運営向けレポート `/moti_report`',
+              value:
+                '・運営のみが使用できるコマンドです。\n' +
+                '・指定シーズンの全メンバーについて、直近の順位推移・育成数と平均との差をまとめたレポートを表示します。',
+            },
+            {
+              name: '4️⃣ Notion 用サマリー `/moti_notion`',
+              value:
+                '・運営のみが使用できるコマンドです。\n' +
+                '・指定シーズンのデータを、Notion にそのまま貼り付けられる表形式で出力します。',
+            },
+            {
+              name: '✅ 運用上のお願い',
+              value:
+                '・基本的に、シーズン中は週1回程度を目安に `/moti_input` で記録をお願いします。\n' +
+                '・記録済みの内容を修正したい場合は、運営までご相談ください。',
+            },
+          );
+
+        await channel.send({ embeds: [embed] });
+
+        await interaction.reply({
+          content: '通知表チャンネルに使い方ガイドを送信しました。',
+          ephemeral: true,
+        });
+        return;
+      }
+    }
+
+    // ===== モーダル送信（/moti_input のフォーム） =====
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('motiInputModal')) {
+      const rank = parseInt(interaction.fields.getTextInputValue('rank'), 10);
+      const grow = parseInt(interaction.fields.getTextInputValue('grow'), 10);
+
+      if (Number.isNaN(rank) || Number.isNaN(grow)) {
+        await interaction.reply({
+          content: '数字を入力してください。',
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const parts = interaction.customId.split(':');
+      const season = parts[1] || CURRENT_SEASON;
+
+      await appendRecord(interaction.user.id, interaction.user.username, rank, grow, season);
+
+      await interaction.reply({
+        content: `✅ 記録しました。\nシーズン: ${season}\n順位: ${rank}\n育成数: ${grow}`,
+        ephemeral: true,
+      });
+      return;
+    }
+  } catch (err) {
+    console.error('moti interaction error:', err);
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: 'エラーが発生しました。時間をおいて再度お試しください。',
+          ephemeral: true,
+        });
+      } catch {}
+    }
+  }
+});
+
 
 // ===== Botログイン =====
 client.login(TOKEN).catch(err => {
