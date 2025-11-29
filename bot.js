@@ -762,7 +762,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!myRecords.length) {
           await interaction.reply({
             content: `${seasonLabel} の記録がまだありません。/moti_input で記録を追加してください。`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -830,7 +830,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         await interaction.reply({
           embeds: [embed],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -841,7 +841,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
           await interaction.reply({
             content: 'このコマンドは運営のみ実行できます。',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -850,7 +850,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!records.length) {
           await interaction.reply({
             content: `${seasonLabel} の記録がまだありません。`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -919,7 +919,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         await interaction.reply({
           embeds: [embed],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -930,7 +930,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
           await interaction.reply({
             content: 'このコマンドは運営のみ実行できます。',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -939,7 +939,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!records.length) {
           await interaction.reply({
             content: `${seasonLabel} の記録がまだありません。`,
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -995,18 +995,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         await interaction.reply({
           content: '```markdown\n' + notionTable + '\n```',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
-      // /moti_help → 使い方ガイド
+      // 使い方ガイド
       if (commandName === 'moti_help') {
         const member = interaction.member;
         if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
           await interaction.reply({
             content: 'このコマンドは運営のみ実行できます。',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -1015,7 +1015,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!channel || !channel.isTextBased()) {
           await interaction.reply({
             content: '通知表チャンネルを取得できませんでした。MOTI_NOTICE_CHANNEL_ID を確認してください。',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
           return;
         }
@@ -1067,7 +1067,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         await interaction.reply({
           content: '通知表チャンネルに使い方ガイドを送信しました。',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -1081,7 +1081,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (Number.isNaN(rank) || Number.isNaN(grow)) {
         await interaction.reply({
           content: '数字を入力してください。',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -1093,22 +1093,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       await interaction.reply({
         content: `✅ 記録しました。\nシーズン: ${season}\n順位: ${rank}\n育成数: ${grow}`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
-  } catch (err) {
-    console.error('moti interaction error:', err);
-    if (!interaction.replied && !interaction.deferred) {
-      try {
-        await interaction.reply({
-          content: 'エラーが発生しました。時間をおいて再度お試しください。',
-          ephemeral: true,
-        });
-      } catch {}
+} catch (err) {
+  console.error('moti interaction error:', err);
+
+  const msg = 'エラーが発生しました。時間をおいて再度お試しください。';
+
+  try {
+    if (interaction.deferred || interaction.replied) {
+      // すでに defer / reply 済み → editReply で上書き
+      await interaction.editReply({ content: msg });
+    } else {
+      // まだ返していない → ここで一度だけ reply
+      await interaction.reply({
+        content: msg,
+        flags: MessageFlags.Ephemeral, 
+      });
     }
+  } catch (replyErr) {
+    console.error('moti error reply failed:', replyErr);
   }
+}
 });
+
 
 
 // ===== Botログイン =====
