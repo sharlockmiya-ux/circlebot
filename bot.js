@@ -34,9 +34,17 @@ const cron = require('node-cron');
 
 const {
   appendRecord,
-  getAllRecords,
   getRecordsByUser,
+  getAllRecords,
+  getUserSeasonHistory, // ← 追加
 } = require('./data/motiSheetStore');
+
+function parseSeasonNumber(season) {
+  if (!season) return 0;
+  const m = String(season).match(/\d+/);
+  return m ? Number(m[0]) : 0;
+}
+
 
 const CURRENT_SEASON = process.env.MOTI_CURRENT_SEASON || 'S35';
 const MOTI_NOTICE_CHANNEL_ID = process.env.MOTI_NOTICE_CHANNEL_ID;
@@ -73,6 +81,151 @@ const originalVcNames = new Map();
 
 // === VCログ自動削除（3日経ったログを消す） ===
 const VC_LOG_MESSAGE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
+
+// ===== 成績通知表: シーズン別サマリー共通処理 =====
+async function buildSeasonSummaryForUser(userId, username, limitSeasons) {
+  // 全シーズン分の記録を取得（getAllRecords が season 省略時に全件返す前提）
+  const allRecords = await getAllRecords();
+
+  if (!allRecords || !allRecords.length) {
+    return null;
+  }
+
+  // season -> Map<userId, { timestamp, rank, grow, username }>
+  const seasonUserMap = new Map();
+
+  for (const r of allRecords) {
+    const seasonKey = r.season || 'UNKNOWN';
+
+    if (!seasonUserMap.has(seasonKey)) {
+      seasonUserMap.set(seasonKey, new Map());
+    }
+    const userMap = seasonUserMap.get(seasonKey);
+
+    const prev = userMap.get(r.userId);
+    // 同じシーズン・同じユーザーでは「一番新しい記録」を採用
+    if (!prev || r.timestamp > prev.timestamp) {
+      userMap.set(r.userId, {
+        timestamp: r.timestamp,
+        rank: r.rank,
+        grow: r.grow,
+        username: r.username,
+      });
+    }
+  }
+
+  // シーズンを番号順にソート（"S35" などを想定）
+  const sortSeasonKeys = (keys) => {
+    return [...keys].sort((a, b) => {
+      const na = parseInt(String(a).replace(/^\D+/, ''), 10);
+      const nb = parseInt(String(b).replace(/^\D+/, ''), 10);
+
+      if (Number.isNaN(na) || Number.isNaN(nb)) {
+        return String(a).localeCompare(String(b));
+      }
+      return na - nb;
+    });
+  };
+
+  const allSeasonKeysSorted = sortSeasonKeys(seasonUserMap.keys());
+
+  // このユーザーが記録を持っているシーズンだけを抽出
+  const userSeasonKeys = allSeasonKeysSorted.filter(
+    (s) => seasonUserMap.get(s).has(userId),
+  );
+
+  if (!userSeasonKeys.length) {
+    return null;
+  }
+
+  // 直近 limitSeasons 件だけ
+  const targetSeasonKeys = limitSeasons
+    ? userSeasonKeys.slice(-limitSeasons)
+    : userSeasonKeys;
+
+  // シーズンごとの「サークル平均 今季育成数」を計算
+  const prevGrowByUser = new Map();
+  const circleAvgGrowBySeason = new Map();
+
+  for (const s of allSeasonKeysSorted) {
+    const usersInSeason = seasonUserMap.get(s);
+    const diffs = [];
+
+    for (const [uId, rec] of usersInSeason.entries()) {
+      const prevGrow = prevGrowByUser.get(uId);
+      const growDiff =
+        prevGrow == null ? rec.grow : rec.grow - prevGrow;
+
+      diffs.push(growDiff);
+      prevGrowByUser.set(uId, rec.grow);
+    }
+
+    const avgGrow =
+      diffs.length > 0
+        ? diffs.reduce((a, b) => a + b, 0) / diffs.length
+        : 0;
+
+    circleAvgGrowBySeason.set(s, avgGrow);
+  }
+
+  // 対象ユーザーのシーズンごとサマリーを作成
+  const lines = [];
+  let prevRankUser = null;
+  let prevGrowUser = null;
+
+  for (const s of targetSeasonKeys) {
+    const rec = seasonUserMap.get(s).get(userId);
+    if (!rec) continue;
+
+    const lastRank = rec.rank;
+    const lastGrow = rec.grow;
+
+    const seasonGrow =
+      prevGrowUser == null ? lastGrow : lastGrow - prevGrowUser;
+    const seasonRankDiff =
+      prevRankUser == null ? 0 : lastRank - prevRankUser;
+
+    const avgGrow = circleAvgGrowBySeason.get(s) ?? 0;
+    const diffFromAvg = seasonGrow - avgGrow;
+
+    const mark =
+      diffFromAvg > 0 ? '🟢' :
+      diffFromAvg < 0 ? '🔻' :
+      '➖';
+
+    const rankDiffText =
+      prevRankUser == null
+        ? '（初期値）'
+        : `（前シーズン比 ${seasonRankDiff >= 0 ? '+' : ''}${seasonRankDiff}）`;
+
+    lines.push(
+      `**${s}**\n` +
+      `最終順位: ${lastRank}位 ${rankDiffText}\n` +
+      `最終育成数: ${lastGrow}（今季 +${seasonGrow}）\n` +
+      `　┗ 今季育成数: +${seasonGrow}（サークル平均 +${avgGrow.toFixed(1)}）${mark}`,
+    );
+
+    prevRankUser = lastRank;
+    prevGrowUser = lastGrow;
+  }
+
+  if (!lines.length) {
+    return null;
+  }
+
+  const title =
+    limitSeasons && targetSeasonKeys.length > limitSeasons
+      ? `📘 シーズン別まとめ（直近${limitSeasons}シーズン） - ${username}`
+      : `📘 シーズン別まとめ - ${username}`;
+
+  return {
+    title,
+    description:
+      '各シーズンの最終順位と「今季育成数（前シーズン末からの増加）」を表示します。',
+    lines,
+  };
+}
+
 
 async function cleanupOldVcLogs(client) {
   if (!VC_LOG_CHANNEL_ID) return;
@@ -767,7 +920,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      // ---------- /moti_me → 自分の推移 ----------
+                // /moti_me → 自分の推移
       if (commandName === 'moti_me') {
         const userId = interaction.user.id;
         const myRecords = await getRecordsByUser(userId, season);
@@ -782,8 +935,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         myRecords.sort((a, b) => a.timestamp - b.timestamp);
         const latest = myRecords.slice(-10);
-        const rankHistory = latest.map(r => r.rank);
-        const growHistory = latest.map(r => r.grow);
+        const rankHistory = latest.map((r) => r.rank);
+        const growHistory = latest.map((r) => r.grow);
 
         const lastRank = rankHistory[rankHistory.length - 1];
         const prevRank = rankHistory[rankHistory.length - 2] ?? lastRank;
@@ -794,7 +947,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const rankDiff = lastRank - prevRank;
         const growDiff = lastGrow - prevGrow;
 
-        // 平均との比較
+        // サークル平均（同シーズン・直近2回分の増加量）
         const allRecords = await getAllRecords(season);
         const byUser = new Map();
         for (const r of allRecords) {
@@ -819,13 +972,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const diffFromAvg = growDiff - avgDelta;
 
         const growMark =
-          diffFromAvg > 0 ? '🔺' :
+          diffFromAvg > 0 ? '🟢' :
           diffFromAvg < 0 ? '🔻' :
           '➖';
 
         const embed = new EmbedBuilder()
           .setTitle(`📊 ${seasonLabel} の ${interaction.user.username} さんの成績推移`)
           .setDescription('最新10回分の記録です。')
+          .setColor(0xff4d4d)
           .addFields(
             {
               name: '順位推移',
@@ -837,9 +991,103 @@ client.on(Events.InteractionCreate, async (interaction) => {
               name: '育成数推移',
               value:
                 `${prevGrow} → ${lastGrow}\n` +
-                `直近増加: +${growDiff}（平均 ${avgDelta.toFixed(1)}）${growMark}`,
+                `直近増加: +${growDiff}（サークル平均 +${avgDelta.toFixed(1)}）${growMark}`,
             },
           );
+
+        await interaction.reply({
+          embeds: [embed],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+            // /moti_summary → 直近5シーズンのシーズン別まとめ
+      if (commandName === 'moti_summary') {
+        const user = interaction.user;
+        const summary = await buildSeasonSummaryForUser(user.id, user.username, 5);
+
+        if (!summary) {
+          await interaction.reply({
+            content: 'まだ記録がありません。/moti_input で記録を追加してください。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle(summary.title + '（直近5シーズン）')
+          .setDescription(summary.description)
+          .setColor(0xff4d4d);
+
+        // 1024文字制限を考慮して分割
+        let current = '';
+        const fields = [];
+
+        for (const line of summary.lines.slice(-5)) {
+          const block = (current ? '\n\n' : '') + line;
+          if ((current + block).length > 1024) {
+            fields.push(current);
+            current = line;
+          } else {
+            current += block;
+          }
+        }
+        if (current) fields.push(current);
+
+        fields.forEach((value, index) => {
+          embed.addFields({
+            name: index === 0 ? 'シーズン別サマリー' : '\u200b',
+            value,
+          });
+        });
+
+        await interaction.reply({
+          embeds: [embed],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      // /moti_summary_all → 全シーズンのシーズン別まとめ
+      if (commandName === 'moti_summary_all') {
+        const user = interaction.user;
+        const summary = await buildSeasonSummaryForUser(user.id, user.username, null);
+
+        if (!summary) {
+          await interaction.reply({
+            content: 'まだ記録がありません。/moti_input で記録を追加してください。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle(summary.title + '（全期間）')
+          .setDescription(summary.description)
+          .setColor(0xff4d4d);
+
+        // 文字数制限を考慮して分割
+        let current = '';
+        const fields = [];
+
+        for (const line of summary.lines) {
+          const block = (current ? '\n\n' : '') + line;
+          if ((current + block).length > 1024) {
+            fields.push(current);
+            current = line;
+          } else {
+            current += block;
+          }
+        }
+        if (current) fields.push(current);
+
+        fields.forEach((value, index) => {
+          embed.addFields({
+            name: index === 0 ? 'シーズン別サマリー' : '\u200b',
+            value,
+          });
+        });
 
         await interaction.reply({
           embeds: [embed],

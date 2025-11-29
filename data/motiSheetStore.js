@@ -121,8 +121,35 @@ async function getAllRecords(season) {
   return all.filter((r) => r.season === season);
 }
 
+// ユーザーの全シーズン分の記録を取得（userId でフィルタ）
+async function getUserSeasonHistory(userId) {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: '記録!A2:F',
+  });
+
+  const rows = res.data.values || [];
+
+  return rows
+    .filter((row) => row[0] === userId)
+    .map((row) => {
+      const [uid, username, timestamp, rank, grow, season] = row;
+      return {
+        userId: uid,
+        username: username || 'Unknown',
+        timestamp: timestamp ? new Date(timestamp).getTime() : 0,
+        rank: Number(rank) || 0,
+        grow: Number(grow) || 0,
+        season: season || null,
+      };
+    });
+}
+
+
 module.exports = {
   appendRecord,
   getRecordsByUser,
   getAllRecords,
+  getUserSeasonHistory,   // ← 追加
 };
+

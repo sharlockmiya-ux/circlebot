@@ -57,6 +57,15 @@ const commands = [
     .setDescription('通知表チャンネルに使い方ガイドを送信します（運営専用）。')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
+
+    new SlashCommandBuilder()
+  .setName('moti_summary')
+  .setDescription('直近5シーズン分のシーズン別成績まとめを表示します。'),
+
+new SlashCommandBuilder()
+  .setName('moti_summary_all')
+  .setDescription('全シーズン分のシーズン別成績まとめを表示します。'),
+  
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
