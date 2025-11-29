@@ -1261,77 +1261,68 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      // ---------- /moti_help → ガイド送信 ----------
-      if (commandName === 'moti_help') {
-        const member = interaction.member;
-        if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
-          await interaction.reply({
-            content: 'このコマンドは運営のみ実行できます。',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const channel = await interaction.client.channels.fetch(MOTI_NOTICE_CHANNEL_ID);
-        if (!channel || !channel.isTextBased()) {
-          await interaction.reply({
-            content: '通知表チャンネルを取得できませんでした。MOTI_NOTICE_CHANNEL_ID を確認してください。',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const embed = new EmbedBuilder()
-          .setTitle('📊 成績通知表システムの使い方')
-          .setDescription(
-            'このチャンネルでは、各自の順位・育成数の推移を記録し、振り返りに活用します。\n' +
-            '以下のコマンドは、基本的に各自が自分の成績を管理するためのものです。'
-          )
-          .addFields(
-            {
-              name: '1️⃣ 記録の登録 `/moti_input`',
-              value:
-                '・自分の現在の順位と育成数を記録します。\n' +
-                '・コマンドを実行すると入力フォームが表示されますので、数字を入力して送信してください。\n' +
-                '・`season` オプションを指定すると、特定シーズン（例: `S35`）の記録として保存されます。\n' +
-                '　（省略時は現在のシーズンとして記録されます）',
-            },
-            {
-              name: '2️⃣ 自分の推移の確認 `/moti_me`',
-              value:
-                '・自分の記録だけを集計し、最新10件分の順位・育成数の推移を表示します。\n' +
-                '・`season` オプションで対象シーズンを指定できます（例: `/moti_me season:S35`）。\n' +
-                '・表示される育成数には、全員の平均増加量との比較も含まれます。\n' +
-                '　例：`直近増加: +138（平均 +95.0）🔺`',
-            },
-            {
-              name: '3️⃣ 運営向けレポート `/moti_report`',
-              value:
-                '・運営のみが使用できるコマンドです。\n' +
-                '・指定シーズンの全メンバーについて、直近の順位推移・育成数と平均との差をまとめたレポートを表示します。',
-            },
-            {
-              name: '4️⃣ Notion 用サマリー `/moti_notion`',
-              value:
-                '・運営のみが使用できるコマンドです。\n' +
-                '・指定シーズンのデータを、Notion にそのまま貼り付けられる表形式で出力します。',
-            },
-            {
-              name: '✅ 運用上のお願い',
-              value:
-                '・基本的に、シーズン中は週1回程度を目安に `/moti_input` で記録をお願いします。\n' +
-                '・記録済みの内容を修正したい場合は、運営までご相談ください。',
-            },
-          );
-
-        await channel.send({ embeds: [embed] });
-
-        await interaction.reply({
-          content: '通知表チャンネルに使い方ガイドを送信しました。',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
+     // 使い方ガイド（全員が利用可・エフェメラル表示）
+if (commandName === 'moti_help') {
+  const embed = new EmbedBuilder()
+    .setTitle('📘 成績通知表システムの使い方')
+    .setColor(0x3b82f6) // 明るめの青。好みに合わせて変更OK
+    .setDescription(
+      [
+        '┃このシステムでは、自分の「順位」と「育成数（累計）」を記録し、シーズンごとの伸びを見える化します。',
+        '┃まずは `/moti_input` で記録し、`/moti_me` や `/moti_me_season` で推移を確認してください。'
+      ].join('\n')
+    )
+    .addFields(
+      {
+        name: '🧩 基本コマンド（全員が利用可能）',
+        value: [
+          '**1️⃣ `/moti_input` – 記録の登録**',
+          '∥ その時点の成績を 1 回分だけ記録します。',
+          '∥ 入力フォームの項目',
+          '　・対象シーズン（任意）… `S35` など。空欄なら「現在シーズン」',
+          '　・現在の順位 … 数字のみ',
+          '　・現在の育成数 … 数字のみ（その時点での累計育成回数）',
+          '',
+          '**2️⃣ `/moti_me` – 直近10件の推移**',
+          '∥ 自分の最新10件の記録から、順位と育成数の推移を表示します。',
+          '∥ 育成数には、サークル平均の増加量との比較が付きます。',
+          '　・🟢 … サークル平均より増加が大きい',
+          '　・🔻 … サークル平均より増加が小さい',
+          '　・➖ … サークル平均とほぼ同じ',
+        ].join('\n'),
+      },
+      {
+        name: '📈 シーズン別・全期間サマリー',
+        value: [
+          '**3️⃣ `/moti_me_season` – シーズン別まとめ（直近5シーズン）**',
+          '∥ 直近5シーズンについて、各シーズンで「どれくらい育成したか」を一覧表示します。',
+          '∥ 1シーズンごとに、増加数と「サークル平均」との差が表示されます。',
+          '',
+          '**4️⃣ `/moti_me_all` – 全期間サマリー**',
+          '∥ これまでの全シーズンについて、シーズンごとの増加数を一覧表示します。',
+          '∥ 一番下に、全シーズン合計の育成数とサークル平均との比較も表示されます。',
+        ].join('\n'),
+      },
+      {
+        name: '🛠 運営専用コマンド（ManageGuild 権限のみ）',
+        value: [
+          '**5️⃣ `/moti_report` – サークル全体レポート**',
+          '∥ 指定シーズンの全メンバーについて、',
+          '　　直近の順位推移・育成数の増加・サークル平均との差をまとめて表示します。',
+          '',
+          '**6️⃣ `/moti_notion` – Notion 用サマリー**',
+          '∥ 指定シーズンのデータを、Notion に貼り付け可能な表形式で出力します。',
+          '∥ メンバー名 / 順位推移 / 最終順位 / 直近の増減 / 育成数推移 / サークル平均との差 などを含みます。',
+        ].join('\n'),
       }
+    );
+
+  await interaction.reply({
+    embeds: [embed],
+    flags: MessageFlags.Ephemeral, // 自分にだけ見える
+  });
+  return;
+}
     }
 
     // ===== モーダル送信（/moti_input のフォーム） =====
