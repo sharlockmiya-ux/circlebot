@@ -225,7 +225,7 @@ const IDOL_ROLE_ID_SET = new Set(IDOL_ROLES.map(r => r.id));
 client.once(Events.ClientReady, async (clientReady) => {
   console.log(`✅ Logged in as ${clientReady.user.tag}`);
 
-  setupMotiMonthlyReminder(c);
+  setupMotiMonthlyReminder(client);
 
   // === VCログ自動削除 ===
   setInterval(() => cleanupOldVcLogs(client), 3 * 60 * 60 * 1000);
