@@ -12,7 +12,7 @@ const RAW_PRIVATE_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 const PRIVATE_KEY = RAW_PRIVATE_KEY
   ? RAW_PRIVATE_KEY.replace(/\\n/g, '\n')
   : undefined;
-
+  
 // 起動時に最低限のチェックだけしておく（秘密情報は出さない）
 if (!SPREADSHEET_ID || !SERVICE_EMAIL || !PRIVATE_KEY) {
   console.error('[motiSheetStore] ❌ 環境変数が足りません');
@@ -20,6 +20,22 @@ if (!SPREADSHEET_ID || !SERVICE_EMAIL || !PRIVATE_KEY) {
   console.error('[motiSheetStore] GOOGLE_SERVICE_ACCOUNT_EMAIL:', !!SERVICE_EMAIL);
   console.error('[motiSheetStore] GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:', !!PRIVATE_KEY);
 }
+
+// デバッグ用：環境変数の状態をざっくり出す（中身そのものは出さない）
+console.log('[motiSheetStore] env check:', {
+  hasSpreadsheetId: !!SPREADSHEET_ID,
+  hasServiceEmail: !!SERVICE_EMAIL,
+  privateKeyLength: PRIVATE_KEY ? PRIVATE_KEY.length : 0,
+});
+
+// 最低限の存在チェック（足りなければエラーを出す）
+if (!SPREADSHEET_ID || !SERVICE_EMAIL || !PRIVATE_KEY) {
+  console.error('[motiSheetStore] ✖ 環境変数が足りません');
+  console.error('[motiSheetStore] SPREADSHEET_ID:', !!SPREADSHEET_ID);
+  console.error('[motiSheetStore] GOOGLE_SERVICE_ACCOUNT_EMAIL:', !!SERVICE_EMAIL);
+  console.error('[motiSheetStore] GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY:', !!PRIVATE_KEY);
+}
+
 
 // ===== Google Sheets クライアント作成 =====
 const auth = new google.auth.JWT(
