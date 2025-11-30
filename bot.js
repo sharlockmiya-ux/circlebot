@@ -918,6 +918,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       const { commandName } = interaction;
 
+      // ★ ここから追加 ★
+    if (commandName === 'moti_season_close') {
+      const season = interaction.options.getString('season');
+
+      await interaction.reply({
+        content: `テスト: シーズン ${season} の終了案内コマンドが正常に呼び出されました。`,
+        ephemeral: true,
+      });
+
+      console.log(`[moti_season_close] replied for season=${season}`);
+      return;
+    }
+
       // 共通: season / seasonLabel（/moti_input 以外で使う）
       const optionSeason = interaction.options.getString('season');
       const season = optionSeason || CURRENT_SEASON;
@@ -1231,17 +1244,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
           return;
         }
-
-     // ---------- /moti_season_close → テスト用の最小ハンドラ ----------
-if (commandName === 'moti_season_close') {
-  const season = interaction.options.getString('season');
-  await interaction.reply({
-    content: `テスト: シーズン ${season} の終了案内コマンドが正常に呼び出されました。`,
-    ephemeral: true,
-  });
-  console.log(`[moti_season_close] replied for season=${season}`);
-  return;
-}
 
 
         // ユーザー別に集計
