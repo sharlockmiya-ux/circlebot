@@ -1227,79 +1227,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-                 // ---------- /moti_season_close → シーズン終了案内テンプレ（運営専用） ----------
-      if (commandName === 'moti_season_close') {
-        try {
-          const member = interaction.member;
-          if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
-            await interaction.reply({
-              content: 'このコマンドは運営のみ実行できます。',
-              ephemeral: true,
-            });
-            return;
-          }
-
-          const optionSeason = interaction.options.getString('season');
-          const seasonLabel = optionSeason || CURRENT_SEASON || '不明なシーズン';
-
-          // まずはすぐに応答しておく（Discord に「応答あり」と認識させる）
-          await interaction.reply({
-            content: `シーズン ${seasonLabel} の終了案内テンプレートを送信します。`,
-            ephemeral: true,
-          });
-
-          // 成績通知用チャンネルを取得
-          const channel = await client.channels.fetch(MOTI_NOTICE_CHANNEL_ID).catch(() => null);
-          if (!channel || !channel.isTextBased()) {
-            await interaction.editReply({
-              content: '成績通知用チャンネルを取得できませんでした。MOTI_NOTICE_CHANNEL_ID の設定を確認してください。',
-            });
-            return;
-          }
-
-          const embed = new EmbedBuilder()
-            .setTitle(`🏁 シーズン ${seasonLabel} 終了のご案内`)
-            .setColor(0x3b82f6)
-            .setDescription([
-              '今シーズンもコンテストへのご参加ありがとうございました。',
-              `本メッセージは、シーズン **${seasonLabel}** の終了に伴う成績通知表入力のご案内です。`,
-              '',
-              '以下の要領で、今期の最終成績のご入力をお願いいたします。',
-              '',
-              '【入力方法】',
-              '/moti_input',
-              '・season: 該当シーズン（例: S35）',
-              '・現在の順位（終了時点の順位）',
-              '・現在の育成数（終了時点の累計）',
-              '',
-              '【任意の振り返り】',
-              '/moti_me … ご自身の成績推移の確認',
-              '/moti_summary / /moti_summary_all … シーズンごとのサマリー確認',
-            ].join('\n'))
-            .setFooter({
-              text: '※入力いただいた成績は、今後のレポートおよび運営判断の参考とさせていただきます。',
-            });
-
-          await channel.send({ embeds: [embed] });
-
-          await interaction.editReply({
-            content: `✅ シーズン ${seasonLabel} の終了案内テンプレートを通知チャンネルに送信しました。`,
-          });
-          return;
-        } catch (error) {
-          console.error('moti_season_close error:', error);
-          if (interaction.deferred || interaction.replied) {
-            await interaction.editReply({
-              content: 'シーズン終了案内の送信中にエラーが発生しました。ログを確認してください。',
-            });
-          } else {
-            await interaction.reply({
-              content: 'シーズン終了案内の送信中にエラーが発生しました。ログを確認してください。',
-              ephemeral: true,
-            });
-          }
-          return;
-        }
+      // ---------- /moti_season_close → テスト用の最小ハンドラ ----------
+if (commandName === 'moti_season_close') {
+  const season = interaction.options.getString('season');
+  await interaction.reply({
+    content: `テスト: シーズン ${season} の終了案内コマンドが正常に呼び出されました。`,
+    ephemeral: true,
+  });
+  return;
       }
 
 
