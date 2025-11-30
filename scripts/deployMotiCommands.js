@@ -1,5 +1,6 @@
 // scripts/deployMotiCommands.js
 require('dotenv').config();
+
 const {
   REST,
   Routes,
@@ -12,13 +13,14 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
 const commands = [
+  // --- シーズン記録系（既存） ---
   new SlashCommandBuilder()
     .setName('moti_input')
     .setDescription('現在の順位と育成数を記録します。')
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
-        .setRequired(false)
+        .setRequired(false),
     ),
 
   new SlashCommandBuilder()
@@ -27,8 +29,16 @@ const commands = [
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
-        .setRequired(false)
+        .setRequired(false),
     ),
+
+  new SlashCommandBuilder()
+    .setName('moti_summary')
+    .setDescription('直近のシーズン別サマリーを表示します。'),
+
+  new SlashCommandBuilder()
+    .setName('moti_summary_all')
+    .setDescription('全シーズン分のシーズン別成績まとめを表示します。'),
 
   new SlashCommandBuilder()
     .setName('moti_report')
@@ -36,7 +46,7 @@ const commands = [
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
-        .setRequired(false)
+        .setRequired(false),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
@@ -47,25 +57,23 @@ const commands = [
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
-        .setRequired(false)
+        .setRequired(false),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
 
   new SlashCommandBuilder()
     .setName('moti_help')
-    .setDescription('通知表チャンネルに使い方ガイドを送信します（運営専用）。')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .setDMPermission(false),
+    .setDescription('成績通知表システムの使い方を表示します。'),
 
-    new SlashCommandBuilder()
-  .setName('moti_summary')
-  .setDescription('直近5シーズン分のシーズン別成績まとめを表示します。'),
+  // --- 月間モチベ調査（新規） ---
+  new SlashCommandBuilder()
+    .setName('moti_month_input')
+    .setDescription('月間モチベーション（育成数・ファン数）を記録します。'),
 
-new SlashCommandBuilder()
-  .setName('moti_summary_all')
-  .setDescription('全シーズン分のシーズン別成績まとめを表示します。'),
-  
+  new SlashCommandBuilder()
+    .setName('moti_month_me')
+    .setDescription('自分の月間モチベ推移を確認します。'),
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
