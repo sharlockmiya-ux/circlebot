@@ -42,7 +42,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('moti_report')
-    .setDescription('全メンバーのレポートを表示します（運営専用）。')
+    .setDescription('指定シーズンの成績推移レポートを表示します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
@@ -83,6 +83,18 @@ const commands = [
       opt.setName('month')
         .setDescription('対象月（例: 2025-11）※省略時は今月')
         .setRequired(false),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+
+  // --- シーズン終了報告（運営専用） ---
+  new SlashCommandBuilder()
+    .setName('moti_season_close')
+    .setDescription('シーズン終了時に、成績一覧を通知チャンネルへ投稿します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）')
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
