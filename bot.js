@@ -1189,6 +1189,117 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
+            // ---------- /moti_month_report → 月間モチベ集計（運営専用） ----------
+      if (commandName === 'moti_month_report') {
+        // 引数の month を正規化（YYYY-MM）
+        const rawMonth = interaction.options.getString('month');
+        let monthKey = '';
+
+        if (rawMonth && rawMonth.trim() !== '') {
+          const normalized = rawMonth.trim().replace(/[./]/g, '-');
+          const m = normalized.match(/^(\d{4})-?(\d{1,2})$/);
+          if (m) {
+            const year = m[1];
+            const month = String(Number(m[2])).padStart(2, '0');
+            monthKey = `${year}-${month}`;
+          }
+        }
+
+        // 入力なし or パース失敗時は今月
+        if (!monthKey) {
+          monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+        }
+
+        const allRecords = await getAllMonthlyRecords();
+        const monthRecords = allRecords.filter(r => r.monthKey === monthKey);
+
+        if (!monthRecords.length) {
+          await interaction.reply({
+            content: `対象月 **${monthKey}** の月間モチベ記録はまだありません。`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // ユーザー別に集計
+        const byUser = new Map();
+        for (const r of monthRecords) {
+          if (!byUser.has(r.userId)) {
+            byUser.set(r.userId, {
+              userId: r.userId,
+              username: r.username || '(no name)',
+              grow: 0,
+              fans: 0,
+              count: 0,
+            });
+          }
+          const bucket = byUser.get(r.userId);
+          bucket.grow += r.grow;
+          bucket.fans += r.fans;
+          bucket.count += 1;
+        }
+
+        const rows = [...byUser.values()];
+
+        // サークル平均育成数（1人あたり）
+        const totalGrow = rows.reduce((sum, u) => sum + u.grow, 0);
+        const totalFans = rows.reduce((sum, u) => sum + u.fans, 0);
+        const memberCount = rows.length;
+        const avgGrow = memberCount ? totalGrow / memberCount : 0;
+
+        // 育成数の多い順にソート
+        rows.sort((a, b) => b.grow - a.grow);
+
+        const lines = [];
+        const maxRows = 20;
+
+        rows.forEach((u, index) => {
+          const diff = u.grow - avgGrow;
+          const mark =
+            diff > 0 ? '🟢' :
+            diff < 0 ? '🔻' :
+            '➖';
+          const diffText = `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}`;
+
+          const rank = index + 1;
+          const mention = `<@${u.userId}>`;
+
+          lines.push(
+            `${rank}. ${mention}｜育成 ${u.grow}（平均 ${avgGrow.toFixed(1)} / 差分 ${diffText}）${mark}｜ファン +${u.fans}`
+          );
+        });
+
+        let shownLines = lines;
+        if (lines.length > maxRows) {
+          shownLines = [
+            ...lines.slice(0, maxRows),
+            `…ほか **${lines.length - maxRows} 名**`,
+          ];
+        }
+
+        const headerLines = [
+          `対象月: **${monthKey}**`,
+          `参加メンバー: **${memberCount} 人**`,
+          `総育成数: **${totalGrow}**｜総ファン増加: **+${totalFans}**`,
+          `1人あたり平均育成数: **${avgGrow.toFixed(1)}**`,
+          '',
+          '※ 差分は「個人の育成数 − サークル平均育成数」です。',
+        ];
+
+        const embed = new EmbedBuilder()
+          .setTitle(`📊 月間モチベ集計レポート｜${monthKey}`)
+          .setColor(0xf97316)
+          .setDescription([...headerLines, ...shownLines].join('\n'))
+          .setFooter({ text: 'このレポートは ManageGuild 権限を持つ運営向けです。' });
+
+        await interaction.reply({
+          embeds: [embed],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      
       // /moti_summary_all → 全シーズンのシーズン別まとめ
       if (commandName === 'moti_summary_all') {
         const user = interaction.user;

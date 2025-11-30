@@ -13,7 +13,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
 const commands = [
-  // --- シーズン記録系（既存） ---
+  // --- シーズン記録系 ---
   new SlashCommandBuilder()
     .setName('moti_input')
     .setDescription('現在の順位と育成数を記録します。')
@@ -66,7 +66,7 @@ const commands = [
     .setName('moti_help')
     .setDescription('成績通知表システムの使い方を表示します。'),
 
-  // --- 月間モチベ調査（新規） ---
+  // --- 月間モチベ調査（一般メンバー用） ---
   new SlashCommandBuilder()
     .setName('moti_month_input')
     .setDescription('月間モチベーション（育成数・ファン数）を記録します。'),
@@ -74,6 +74,18 @@ const commands = [
   new SlashCommandBuilder()
     .setName('moti_month_me')
     .setDescription('自分の月間モチベ推移を確認します。'),
+
+  // --- 月間モチベ集計（運営専用） ---
+  new SlashCommandBuilder()
+    .setName('moti_month_report')
+    .setDescription('指定した月の月間モチベ集計を表示します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('month')
+        .setDescription('対象月（例: 2025-11）※省略時は今月')
+        .setRequired(false),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
