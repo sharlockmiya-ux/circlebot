@@ -1606,6 +1606,69 @@ if (commandName === 'moti_season_close') {
       }
     }
 
+// ===== モーダル送信（/moti_input のフォーム） =====
+    if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
+      try {
+        const rawSeason = interaction.fields.getTextInputValue('season').trim();
+        const rankText = interaction.fields.getTextInputValue('rank').trim();
+        const growText = interaction.fields.getTextInputValue('grow').trim();
+
+        const rank = parseInt(rankText, 10);
+        const grow = parseInt(growText, 10);
+
+        if (Number.isNaN(rank) || Number.isNaN(grow)) {
+          await interaction.reply({
+            content: '順位と育成数は数字で入力してください。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // シーズンはフォーム優先／空欄なら CURRENT_SEASON
+        const season = rawSeason || CURRENT_SEASON;
+        if (!season) {
+          await interaction.reply({
+            content: 'シーズンが空欄です。コマンドの season またはフォームのいずれかに入力してください。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // スプレッドシートに記録
+        await appendRecord(
+          interaction.user.id,
+          interaction.user.username || interaction.user.tag,
+          rank,
+          grow,
+          season,
+        );
+
+        await interaction.reply({
+          content: [
+            '✅ 記録を保存しました。',
+            `シーズン: ${season}`,
+            `順位: ${rank}`,
+            `育成数: ${grow}`,
+          ].join('\n'),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      } catch (err) {
+        console.error('motiInputModal submit error:', err);
+        if (interaction.deferred || interaction.replied) {
+          await interaction.editReply({
+            content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+          });
+        } else {
+          await interaction.reply({
+            content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+        return;
+      }
+    }
+
       // ===== モーダル送信（/moti_month_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal') {
       const rawMonth = interaction.fields.getTextInputValue('monthKey').trim();
