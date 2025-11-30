@@ -908,6 +908,11 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+   // 追加：どのスラッシュコマンドが呼ばれたかをログに出す
+  if (interaction.isChatInputCommand()) {
+    console.log(`[Slash] /${interaction.commandName} from ${interaction.user.tag} (${interaction.user.id})`);
+  }
+
   try {
     // ===== スラッシュコマンド =====
     if (interaction.isChatInputCommand()) {
@@ -1227,15 +1232,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-      // ---------- /moti_season_close → テスト用の最小ハンドラ ----------
+     // ---------- /moti_season_close → テスト用の最小ハンドラ ----------
 if (commandName === 'moti_season_close') {
   const season = interaction.options.getString('season');
   await interaction.reply({
     content: `テスト: シーズン ${season} の終了案内コマンドが正常に呼び出されました。`,
     ephemeral: true,
   });
+  console.log(`[moti_season_close] replied for season=${season}`);
   return;
-      }
+}
 
 
         // ユーザー別に集計
