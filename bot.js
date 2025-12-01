@@ -1038,7 +1038,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
           new ActionRowBuilder().addComponents(growInput),
         );
 
-        await interaction.showModal(modal);
+        try {
+          await interaction.showModal(modal);
+        } catch (err) {
+          console.error('moti_input showModal error:', err);
+
+          // すでにどこかで応答されている場合（40060 / 10062）は黙って無視
+          if (err.code === 40060 || err.code === 10062) {
+            return;
+          }
+
+          // まだ応答されていなければ、エラーメッセージを返す
+          if (!interaction.replied && !interaction.deferred) {
+            try {
+              await interaction.reply({
+                content: 'モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
+                flags: MessageFlags.Ephemeral,
+              });
+            } catch (e) {
+              console.error('moti_input error reply failed:', e);
+            }
+          }
+        }
         return;
       }
 
@@ -1070,13 +1091,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
           .setRequired(true)
           .setPlaceholder('例: 50000');
 
-        modal.addComponents(
+         modal.addComponents(
           new ActionRowBuilder().addComponents(monthInput),
           new ActionRowBuilder().addComponents(growInput),
           new ActionRowBuilder().addComponents(fansInput),
         );
 
-        await interaction.showModal(modal);
+        try {
+          await interaction.showModal(modal);
+        } catch (err) {
+          console.error('moti_month_input showModal error:', err);
+
+          // 他のプロセス・他のハンドラですでに応答済みなら黙って終了
+          if (err.code === 40060 || err.code === 10062) {
+            return;
+          }
+
+          if (!interaction.replied && !interaction.deferred) {
+            try {
+              await interaction.reply({
+                content: '月間モチベ調査モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
+                flags: MessageFlags.Ephemeral,
+              });
+            } catch (e) {
+              console.error('moti_month_input error reply failed:', e);
+            }
+          }
+        }
         return;
       }
 
@@ -1837,6 +1878,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
     }
+
 }
 
  });
