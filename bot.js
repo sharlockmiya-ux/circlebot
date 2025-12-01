@@ -1723,7 +1723,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       try {
         // ★ まず deferReply で「あとで返事します」と伝える（3秒制限を回避）
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const rawSeason = interaction.fields.getTextInputValue('season').trim();
         const rankText  = interaction.fields.getTextInputValue('rank').trim();
