@@ -1793,7 +1793,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       try {
         // ★ こちらも deferReply を必ず最初に
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const rawMonth  = interaction.fields.getTextInputValue('monthKey').trim();
         const totalText = interaction.fields.getTextInputValue('grow').trim(); // 現在の累計育成数
