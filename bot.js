@@ -45,6 +45,98 @@ const {
   getMonthlyRecordsByUser,
 } = require('./data/motiMonthSheetStore');
 
+// 月間調査の「未入力メンバー」にDMを送る処理本体
+async function runMonthlyDmReminder(client, opts = {}) {
+  if (!MAIN_GUILD_ID) {
+    console.warn('MAIN_GUILD_ID が設定されていないため、月間DMリマインドをスキップします。');
+    return { monthKey: null, successIds: [], failedIds: [], targetCount: 0 };
+  }
+
+  const monthKey = opts.monthKey || new Date().toISOString().slice(0, 7); // "YYYY-MM"
+
+  try {
+    const guild = await client.guilds.fetch(MAIN_GUILD_ID);
+    // 全メンバーを取得（キャッシュだけだと抜けが出る可能性があるので fetch）
+    await guild.members.fetch();
+    const allMembers = guild.members.cache.filter(m => !m.user.bot);
+
+    // 月間調査の全レコードを取得
+    const allRecords = await getAllMonthlyRecords();
+    const submittedUserIds = new Set(
+      allRecords
+        .filter(r => r.monthKey === monthKey)
+        .map(r => r.userId),
+    );
+
+    // 「サーバーにいるメンバー」−「その月に入力済み」＝ 未入力者
+    const targets = allMembers.filter(m => !submittedUserIds.has(m.id));
+
+    console.log(`[moti] month DM remind target count=${targets.size} for ${monthKey}`);
+
+    const successIds = [];
+    const failedIds = [];
+
+    for (const [id, member] of targets) {
+      try {
+        await member.send([
+          'こんにちは、放課後アイドル部運営です。',
+          '',
+          `対象月 **${monthKey}** の「月間モチベ調査」への入力がまだ確認できていません。`,
+          'お手数ですが、以下のコマンドから入力をお願いいたします。',
+          '',
+          '∥ `/moti_month_input` … 月間入力フォームを開きます。',
+          '',
+          '※ すでに入力済みの場合は、このメッセージは行き違いです。お手数ですが破棄してください。',
+        ].join('\n'));
+
+        successIds.push(id);
+        // レートリミット緩和のため少し待つ（1秒）
+        await new Promise(r => setTimeout(r, 1000));
+      } catch (err) {
+        console.error('[moti] month DM send failed for', id, err);
+        failedIds.push(id);
+      }
+    }
+
+    console.log(`[moti] month DM remind done: success=${successIds.length}, failed=${failedIds.length}`);
+
+    // 🔔 結果を指定チャンネルにレポート
+    try {
+      if (MOTI_DM_LOG_CHANNEL_ID) {
+        const logChannel = await client.channels.fetch(MOTI_DM_LOG_CHANNEL_ID);
+        if (logChannel && logChannel.isTextBased()) {
+          const lines = [
+            '【月間モチベ自動DMレポート】',
+            `対象月: **${monthKey}**`,
+            `対象メンバー数: ${targets.size}`,
+            `送信成功: ${successIds.length}件`,
+            `送信失敗: ${failedIds.length}件`,
+          ];
+
+          if (failedIds.length) {
+            const mentions = failedIds.map(id => `<@${id}>`).join(', ');
+            lines.push('', `DM送信に失敗したメンバー: ${mentions}`);
+          }
+
+          await logChannel.send(lines.join('\n'));
+        }
+      }
+    } catch (logErr) {
+      console.error('[moti] month DM log send failed:', logErr);
+    }
+
+    return {
+      monthKey,
+      successIds,
+      failedIds,
+      targetCount: targets.size,
+    };
+  } catch (err) {
+    console.error('[moti] month DM remind fatal error:', err);
+    return { monthKey, successIds: [], failedIds: [], targetCount: 0, error: err };
+  }
+}
+
 
 function parseSeasonNumber(season) {
   if (!season) return 0;
@@ -55,6 +147,10 @@ function parseSeasonNumber(season) {
 
 const CURRENT_SEASON = process.env.MOTI_CURRENT_SEASON || 'S35';
 const MOTI_NOTICE_CHANNEL_ID = process.env.MOTI_NOTICE_CHANNEL_ID;
+const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID; 
+
+// 月間モチベ自動DMの結果を投稿するチャンネル
+const MOTI_DM_LOG_CHANNEL_ID = '1431975383242113066';
 
 const {
   joinVoiceChannel,
@@ -369,6 +465,14 @@ function setupMotiMonthlyReminder(client) {
         console.error('moti reminder error:', err);
       }
     },
+    {
+      timezone: 'Asia/Tokyo',
+    },
+  );
+    // 毎月4日 21:00 に「月間モチベ未入力者へのDMリマインド」を実行
+  cron.schedule(
+    '0 21 4 * *',
+    () => runMonthlyDmReminder(client, {}),
     {
       timezone: 'Asia/Tokyo',
     },
@@ -1337,6 +1441,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
 
+        
+
         // 入力なし or パース失敗時は今月
         if (!monthKey) {
           monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -1568,6 +1674,67 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
+
+            // ---------- /moti_month_remind → 月間モチベ未入力者にDM送信（運営専用） ----------
+      if (commandName === 'moti_month_remind') {
+        if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
+          await interaction.reply({
+            content: 'このコマンドは運営専用です。',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // 引数の month を正規化（YYYY-MM）
+        const rawMonth = interaction.options.getString('month');
+        let monthKey = '';
+
+        if (rawMonth && rawMonth.trim() !== '') {
+          const normalized = rawMonth.trim().replace(/[./]/g, '-');
+          const m = normalized.match(/^(\d{4})-?(\d{1,2})$/);
+          if (m) {
+            const year = m[1];
+            const month = String(Number(m[2])).padStart(2, '0');
+            monthKey = `${year}-${month}`;
+          }
+        }
+
+        // 入力なし or パース失敗時は今月
+        if (!monthKey) {
+          monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+        }
+
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const result = await runMonthlyDmReminder(interaction.client, { monthKey });
+
+        if (!result || result.targetCount === 0) {
+          await interaction.editReply({
+            content: `対象月 **${monthKey}** について、未入力メンバーは見つかりませんでした。`,
+          });
+          return;
+        }
+
+        const { successIds, failedIds, targetCount } = result;
+
+        const lines = [
+          `対象月 **${monthKey}** の未入力メンバーにDMを送信しました。`,
+          `対象メンバー数: ${targetCount}`,
+          `送信成功: ${successIds.length} 件`,
+          `送信失敗: ${failedIds.length} 件`,
+        ];
+
+        if (failedIds.length) {
+          const mentions = failedIds.map(id => `<@${id}>`).join(', ');
+          lines.push('', `DM送信に失敗したメンバー: ${mentions}`);
+        }
+
+        await interaction.editReply({
+          content: lines.join('\n'),
+        });
+        return;
+      }
+
 
       // ---------- /moti_notion → Notion用表（運営専用） ----------
       if (commandName === 'moti_notion') {
