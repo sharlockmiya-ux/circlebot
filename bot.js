@@ -1002,7 +1002,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const season = optionSeason || CURRENT_SEASON;
       const seasonLabel = season || '全期間';
 
-      
+
      if (commandName === 'moti_input') {
   const modal = new ModalBuilder()
     .setCustomId('motiInputModal') // シーズンは customId ではなくフィールドで持つ
@@ -1715,10 +1715,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-     // ===== モーダル送信（/moti_input のフォーム） =====
+         // ===== モーダル送信（/moti_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
+      console.log(`[Modal] motiInputModal submit from ${interaction.user.tag} (${interaction.user.id})`);
+
       try {
-        // まずは応答を予約（3秒制限を避ける）
+        // ★ 最初に deferReply で「あとで返事します」と伝える（3秒制限回避）
         await interaction.deferReply({ ephemeral: true });
 
         const rawSeason = interaction.fields.getTextInputValue('season').trim();
@@ -1764,11 +1766,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       } catch (err) {
         console.error('motiInputModal submit error:', err);
+
         try {
-          // deferReply 済みなので editReply で統一
-          await interaction.editReply({
-            content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
-          });
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({
+              content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+            });
+          } else {
+            await interaction.reply({
+              content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+              flags: MessageFlags.Ephemeral,
+            });
+          }
         } catch (e) {
           console.error('motiInputModal error reply failed:', e);
         }
@@ -1777,11 +1786,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
 
-       // ===== モーダル送信（/moti_month_input のフォーム） =====
+           // ===== モーダル送信（/moti_month_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal') {
-      console.log(`[Modal] motiMonthInputModal from ${interaction.user.tag} (${interaction.user.id})`);
+      console.log(`[Modal] motiMonthInputModal submit from ${interaction.user.tag} (${interaction.user.id})`);
+
       try {
-        // 最初に deferReply（3秒制限を避ける）
+        // ★ まず deferReply して 3秒制限を回避
         await interaction.deferReply({ ephemeral: true });
 
         const rawMonth = interaction.fields.getTextInputValue('monthKey').trim();
@@ -1798,7 +1808,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        // monthKey の正規化（YYYY-MM に寄せる）
+        // monthKey の正規化（YYYY-MM）
         let monthKey = '';
         if (rawMonth) {
           const normalized = rawMonth.replace(/[./]/g, '-');
@@ -1820,7 +1830,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // これまでの「月間増加分」レコードを取得
         const myMonthlyRecords = await getMonthlyRecordsByUser(userId);
 
-        // すでに同じ月の記録があればエラーにする
+        // すでに同じ月の記録があればエラー
         const already = myMonthlyRecords.find((r) => r.monthKey === monthKey);
         if (already) {
           await interaction.editReply({
@@ -1829,7 +1839,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        // これまでの「増加分（grow）」の合計 = いままでの累計育成数
+        // これまでの増加分の合計
         const previousTotal = myMonthlyRecords.reduce(
           (sum, r) => sum + (r.grow || 0),
           0,
@@ -1847,7 +1857,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        // 保存するのは「今月の増加分（diff）」のまま
+        // 保存するのは「今月の増加分（diff）」
         await appendMonthlyRecord(
           userId,
           username,
@@ -1868,17 +1878,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       } catch (err) {
         console.error('motiMonthInputModal submit error:', err);
+
         try {
-          await interaction.editReply({
-            content: '月間モチベの記録中にエラーが発生しました。時間をおいて再度お試しください。',
-          });
+          if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({
+              content: '月間モチベの記録中にエラーが発生しました。時間をおいて再度お試しください。',
+            });
+          } else {
+            await interaction.reply({
+              content: '月間モチベの記録中にエラーが発生しました。時間をおいて再度お試しください。',
+              flags: MessageFlags.Ephemeral,
+            });
+          }
         } catch (e) {
           console.error('motiMonthInputModal error reply failed:', e);
         }
         return;
       }
     }
-
 }
 
  });
