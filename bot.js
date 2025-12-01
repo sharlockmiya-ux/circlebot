@@ -1708,12 +1708,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
             },
           );
 
-        await interaction.reply({
+       await interaction.reply({
           embeds: [embed],
           flags: MessageFlags.Ephemeral, // 自分にだけ見える
         });
         return;
       }
+    } // ★ ここで isChatInputCommand() ブロックを閉じる
+
 
            // ===== モーダル送信（/moti_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
@@ -1892,10 +1894,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } catch (e) {
           console.error('motiMonthInputModal error reply failed:', e);
         }
-        return;
+         return;
       }
     }
-}
 
  });
 
