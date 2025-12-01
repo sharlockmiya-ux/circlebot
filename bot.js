@@ -1674,77 +1674,74 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-          // ===== モーダル送信（/moti_input のフォーム） =====
-    if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
-      try {
-        const rawSeason = interaction.fields.getTextInputValue('season').trim();
-        const rankText = interaction.fields.getTextInputValue('rank').trim();
-        const growText = interaction.fields.getTextInputValue('grow').trim();
+  // ===== モーダル送信（/moti_input のフォーム） =====
+if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
+  try {
+    // まずは応答を予約（3秒制限を避ける）
+    await interaction.deferReply({ ephemeral: true });
 
-        const rank = parseInt(rankText, 10);
-        const grow = parseInt(growText, 10);
+    const rawSeason = interaction.fields.getTextInputValue('season').trim();
+    const rankText = interaction.fields.getTextInputValue('rank').trim();
+    const growText = interaction.fields.getTextInputValue('grow').trim();
 
-        if (Number.isNaN(rank) || Number.isNaN(grow)) {
-          await interaction.reply({
-            content: '順位と育成数は数字で入力してください。',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
+    const rank = parseInt(rankText, 10);
+    const grow = parseInt(growText, 10);
 
-        // シーズンはフォーム優先／空欄なら CURRENT_SEASON
-        const season = rawSeason || CURRENT_SEASON;
-        if (!season) {
-          await interaction.reply({
-            content: 'シーズンが空欄です。コマンドの season またはフォームのいずれかに入力してください。',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        // スプレッドシートに記録
-        await appendRecord(
-          interaction.user.id,
-          interaction.user.username || interaction.user.tag,
-          rank,
-          grow,
-          season,
-        );
-
-        await interaction.reply({
-          content: [
-            '✅ 記録を保存しました。',
-            `シーズン: ${season}`,
-            `順位: ${rank}`,
-            `育成数: ${grow}`,
-          ].join('\n'),
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      } catch (err) {
-        console.error('motiInputModal submit error:', err);
-        if (interaction.deferred || interaction.replied) {
-          await interaction.editReply({
-            content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
-          });
-        } else {
-          await interaction.reply({
-            content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
-            flags: MessageFlags.Ephemeral,
-          });
-        }
-        return;
-      }
+    if (Number.isNaN(rank) || Number.isNaN(grow)) {
+      await interaction.editReply({
+        content: '順位と育成数は数字で入力してください。',
+      });
+      return;
     }
 
-    // ===== モーダル送信（/moti_month_input のフォーム） =====
+    // シーズンはフォーム優先／空欄なら CURRENT_SEASON
+    const season = rawSeason || CURRENT_SEASON;
+    if (!season) {
+      await interaction.editReply({
+        content: 'シーズンが空欄です。コマンドの season またはフォームのいずれかに入力してください。',
+      });
+      return;
+    }
+
+    // スプレッドシートに記録
+    await appendRecord(
+      interaction.user.id,
+      interaction.user.username || interaction.user.tag,
+      rank,
+      grow,
+      season,
+    );
+
+    await interaction.editReply({
+      content: [
+        '✅ 記録を保存しました。',
+        `シーズン: ${season}`,
+        `順位: ${rank}`,
+        `育成数: ${grow}`,
+      ].join('\n'),
+    });
+    return;
+  } catch (err) {
+    console.error('motiInputModal submit error:', err);
+    try {
+      await interaction.editReply({
+        content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+      });
+    } catch (e) {
+      console.error('motiInputModal error reply failed:', e);
+    }
+    return;
+  }
+}
+
+   // ===== モーダル送信（/moti_month_input のフォーム） =====
 if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal') {
   console.log(`[Modal] motiMonthInputModal from ${interaction.user.tag} (${interaction.user.id})`);
 
-  // まずは応答を予約（3秒制限を避ける）
-  await interaction.deferReply({ ephemeral: true });
-
   try {
+    // 最初に deferReply（3秒制限を避ける）
+    await interaction.deferReply({ ephemeral: true });
+
     const rawMonth = interaction.fields.getTextInputValue('monthKey').trim();
     const totalText = interaction.fields.getTextInputValue('grow').trim(); // 現在の累計育成数
     const fansText = interaction.fields.getTextInputValue('fans').trim();
@@ -1808,7 +1805,7 @@ if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal
       return;
     }
 
-    // 保存するのは「今月の増加分（diff）」のまま
+    // 保存するのは「今月の増加分（diff）」
     await appendMonthlyRecord(
       userId,
       username,
@@ -1829,19 +1826,18 @@ if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal
     return;
   } catch (err) {
     console.error('motiMonthInputModal submit error:', err);
-
     try {
       await interaction.editReply({
         content: '月間モチベの記録中にエラーが発生しました。時間をおいて再度お試しください。',
       });
     } catch (e) {
-      console.error('moti error reply failed:', e);
+      console.error('motiMonthInputModal error reply failed:', e);
     }
     return;
-   }
   }
- }
- 
+}
+}
+
  });
 
 
