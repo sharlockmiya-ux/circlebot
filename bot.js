@@ -1002,124 +1002,124 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const season = optionSeason || CURRENT_SEASON;
       const seasonLabel = season || '全期間';
 
-      // ---------- /moti_input → モーダル表示 ----------
-      if (commandName === 'moti_input') {
-        const modal = new ModalBuilder()
-          .setCustomId('motiInputModal') // シーズンは customId ではなくフィールドで持つ
-          .setTitle('モチベ記録入力');
+      
+     if (commandName === 'moti_input') {
+  const modal = new ModalBuilder()
+    .setCustomId('motiInputModal') // シーズンは customId ではなくフィールドで持つ
+    .setTitle('モチベ記録入力');
 
-        // シーズン入力欄
-        const seasonInput = new TextInputBuilder()
-          .setCustomId('season')
-          .setLabel('対象シーズン（例: S35）※空欄なら現在シーズン')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-          .setPlaceholder('S35');
+  // シーズン入力欄
+  const seasonInput = new TextInputBuilder()
+    .setCustomId('season')
+    .setLabel('対象シーズン（例: S35）※空欄なら現在シーズン')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder('S35');
 
-        // 順位
-        const rankInput = new TextInputBuilder()
-          .setCustomId('rank')
-          .setLabel('現在の順位（数字のみ）')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setPlaceholder('例: 3');
+  // 順位
+  const rankInput = new TextInputBuilder()
+    .setCustomId('rank')
+    .setLabel('現在の順位（数字のみ）')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('例: 3');
 
-        // 育成数
-        const growInput = new TextInputBuilder()
-          .setCustomId('grow')
-          .setLabel('現在の育成数（数字のみ）')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setPlaceholder('例: 1252');
+  // 育成数
+  const growInput = new TextInputBuilder()
+    .setCustomId('grow')
+    .setLabel('現在の育成数（数字のみ）')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('例: 120');
 
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(seasonInput),
-          new ActionRowBuilder().addComponents(rankInput),
-          new ActionRowBuilder().addComponents(growInput),
-        );
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(seasonInput),
+    new ActionRowBuilder().addComponents(rankInput),
+    new ActionRowBuilder().addComponents(growInput),
+  );
 
-        try {
-          await interaction.showModal(modal);
-        } catch (err) {
-          console.error('moti_input showModal error:', err);
+  try {
+    await interaction.showModal(modal);
+  } catch (err) {
+    console.error('moti_input showModal error:', err);
 
-          // すでにどこかで応答されている場合（40060 / 10062）は黙って無視
-          if (err.code === 40060 || err.code === 10062) {
-            return;
-          }
+    // すでにどこかで応答済み（40060/10062）の場合は無視して終了
+    if (err.code === 40060 || err.code === 10062) {
+      return;
+    }
 
-          // まだ応答されていなければ、エラーメッセージを返す
-          if (!interaction.replied && !interaction.deferred) {
-            try {
-              await interaction.reply({
-                content: 'モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
-                flags: MessageFlags.Ephemeral,
-              });
-            } catch (e) {
-              console.error('moti_input error reply failed:', e);
-            }
-          }
-        }
-        return;
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: 'モチベ記録入力モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
+          flags: MessageFlags.Ephemeral,
+        });
+      } catch (e) {
+        console.error('moti_input error reply failed:', e);
       }
+    }
+  }
+  return;
+}
+
 
             // ---------- /moti_month_input → 月間モチベ入力モーダル ----------
       if (commandName === 'moti_month_input') {
-        const modal = new ModalBuilder()
-          .setCustomId('motiMonthInputModal')
-          .setTitle('月間モチベ調査');
+  const modal = new ModalBuilder()
+    .setCustomId('motiMonthInputModal')
+    .setTitle('月間モチベ調査');
 
-        const monthInput = new TextInputBuilder()
-          .setCustomId('monthKey')
-          .setLabel('対象月（例: 2025-11）※空欄なら今月')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-          .setPlaceholder('2025-11');
+  const monthInput = new TextInputBuilder()
+    .setCustomId('monthKey')
+    .setLabel('対象月（例: 2025-11）※空欄なら今月')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder('2025-11');
 
-        const growInput = new TextInputBuilder()
-          .setCustomId('grow')
-          .setLabel('現在の育成数（累計）')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setPlaceholder('例: 1200');
+  const growInput = new TextInputBuilder()
+    .setCustomId('grow')
+    .setLabel('現在の育成数（累計）')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('例: 1200');
 
+  const fansInput = new TextInputBuilder()
+    .setCustomId('fans')
+    .setLabel('今月増えたファン数')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('例: 50000');
 
-        const fansInput = new TextInputBuilder()
-          .setCustomId('fans')
-          .setLabel('今月増えたファン数')
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setPlaceholder('例: 50000');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(monthInput),
+    new ActionRowBuilder().addComponents(growInput),
+    new ActionRowBuilder().addComponents(fansInput),
+  );
 
-         modal.addComponents(
-          new ActionRowBuilder().addComponents(monthInput),
-          new ActionRowBuilder().addComponents(growInput),
-          new ActionRowBuilder().addComponents(fansInput),
-        );
+  try {
+    await interaction.showModal(modal);
+  } catch (err) {
+    console.error('moti_month_input showModal error:', err);
 
-        try {
-          await interaction.showModal(modal);
-        } catch (err) {
-          console.error('moti_month_input showModal error:', err);
+    // すでにどこかで応答済み（40060/10062）なら黙って終了
+    if (err.code === 40060 || err.code === 10062) {
+      return;
+    }
 
-          // 他のプロセス・他のハンドラですでに応答済みなら黙って終了
-          if (err.code === 40060 || err.code === 10062) {
-            return;
-          }
-
-          if (!interaction.replied && !interaction.deferred) {
-            try {
-              await interaction.reply({
-                content: '月間モチベ調査モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
-                flags: MessageFlags.Ephemeral,
-              });
-            } catch (e) {
-              console.error('moti_month_input error reply failed:', e);
-            }
-          }
-        }
-        return;
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: '月間モチベ調査モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
+          flags: MessageFlags.Ephemeral,
+        });
+      } catch (e) {
+        console.error('moti_month_input error reply failed:', e);
       }
+    }
+  }
+  return;
+}
+
 
                 // /moti_me → 自分の推移
       if (commandName === 'moti_me') {
