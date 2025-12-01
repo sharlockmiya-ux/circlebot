@@ -1715,17 +1715,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-         // ===== モーダル送信（/moti_input のフォーム） =====
+           // ===== モーダル送信（/moti_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiInputModal') {
       console.log(`[Modal] motiInputModal submit from ${interaction.user.tag} (${interaction.user.id})`);
 
       try {
-        // ★ 最初に deferReply で「あとで返事します」と伝える（3秒制限回避）
+        // ★ まず deferReply で「あとで返事します」と伝える（3秒制限を回避）
         await interaction.deferReply({ ephemeral: true });
 
         const rawSeason = interaction.fields.getTextInputValue('season').trim();
-        const rankText = interaction.fields.getTextInputValue('rank').trim();
-        const growText = interaction.fields.getTextInputValue('grow').trim();
+        const rankText  = interaction.fields.getTextInputValue('rank').trim();
+        const growText  = interaction.fields.getTextInputValue('grow').trim();
 
         const rank = parseInt(rankText, 10);
         const grow = parseInt(growText, 10);
@@ -1785,21 +1785,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-
-           // ===== モーダル送信（/moti_month_input のフォーム） =====
+    // ===== モーダル送信（/moti_month_input のフォーム） =====
     if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal') {
       console.log(`[Modal] motiMonthInputModal submit from ${interaction.user.tag} (${interaction.user.id})`);
 
       try {
-        // ★ まず deferReply して 3秒制限を回避
+        // ★ こちらも deferReply を必ず最初に
         await interaction.deferReply({ ephemeral: true });
 
-        const rawMonth = interaction.fields.getTextInputValue('monthKey').trim();
+        const rawMonth  = interaction.fields.getTextInputValue('monthKey').trim();
         const totalText = interaction.fields.getTextInputValue('grow').trim(); // 現在の累計育成数
-        const fansText = interaction.fields.getTextInputValue('fans').trim();
+        const fansText  = interaction.fields.getTextInputValue('fans').trim();
 
         const currentTotal = parseInt(totalText, 10);
-        const fans = parseInt(fansText, 10);
+        const fans         = parseInt(fansText, 10);
 
         if (Number.isNaN(currentTotal) || Number.isNaN(fans)) {
           await interaction.editReply({
@@ -1808,29 +1807,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        // monthKey の正規化（YYYY-MM）
+        // monthKey の正規化（YYYY-MM に寄せる）
         let monthKey = '';
         if (rawMonth) {
           const normalized = rawMonth.replace(/[./]/g, '-');
           const m = normalized.match(/^(\d{4})-?(\d{1,2})$/);
           if (m) {
-            const year = m[1];
+            const year  = m[1];
             const month = String(Number(m[2])).padStart(2, '0');
             monthKey = `${year}-${month}`;
           }
         }
         // 入力がなければ今月
         if (!monthKey) {
-          monthKey = new Date().toISOString().slice(0, 7);
+          monthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
         }
 
-        const userId = interaction.user.id;
+        const userId   = interaction.user.id;
         const username = interaction.user.username || interaction.user.tag;
 
         // これまでの「月間増加分」レコードを取得
         const myMonthlyRecords = await getMonthlyRecordsByUser(userId);
 
-        // すでに同じ月の記録があればエラー
+        // すでに同じ月の記録があればエラーにする
         const already = myMonthlyRecords.find((r) => r.monthKey === monthKey);
         if (already) {
           await interaction.editReply({
@@ -1839,7 +1838,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        // これまでの増加分の合計
+        // これまでの「増加分（grow）」の合計 = いままでの累計育成数
         const previousTotal = myMonthlyRecords.reduce(
           (sum, r) => sum + (r.grow || 0),
           0,
@@ -1857,7 +1856,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
 
-        // 保存するのは「今月の増加分（diff）」
+        // 保存するのは「今月の増加分（diff）」のまま
         await appendMonthlyRecord(
           userId,
           username,
@@ -1899,7 +1898,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 }
 
  });
-
 
 // ===== Botログイン =====
 client.login(TOKEN).catch(err => {
