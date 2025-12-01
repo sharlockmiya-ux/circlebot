@@ -914,7 +914,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.log(`[Slash] /${interaction.commandName} from ${interaction.user.tag} (${interaction.user.id})`);
   }
 
-  
+
     // ===== スラッシュコマンド =====
     if (interaction.isChatInputCommand()) {
       const { commandName } = interaction;
@@ -1738,112 +1738,110 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // ===== モーダル送信（/moti_month_input のフォーム） =====
-    if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal') {
-      try {
-        const rawMonth = interaction.fields.getTextInputValue('monthKey').trim();
-        const totalText = interaction.fields.getTextInputValue('grow').trim(); // 現在の累計育成数
-        const fansText = interaction.fields.getTextInputValue('fans').trim();
+if (interaction.isModalSubmit() && interaction.customId === 'motiMonthInputModal') {
+  console.log(`[Modal] motiMonthInputModal from ${interaction.user.tag} (${interaction.user.id})`);
 
-        const currentTotal = parseInt(totalText, 10);
-        const fans = parseInt(fansText, 10);
+  // まずは応答を予約（3秒制限を避ける）
+  await interaction.deferReply({ ephemeral: true });
 
-        if (Number.isNaN(currentTotal) || Number.isNaN(fans)) {
-          await interaction.reply({
-            content: '数字を入力してください。',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
+  try {
+    const rawMonth = interaction.fields.getTextInputValue('monthKey').trim();
+    const totalText = interaction.fields.getTextInputValue('grow').trim(); // 現在の累計育成数
+    const fansText = interaction.fields.getTextInputValue('fans').trim();
 
-        // monthKey の正規化（YYYY-MM に寄せる）
-        let monthKey = '';
-        if (rawMonth) {
-          const normalized = rawMonth.replace(/[./]/g, '-');
-          const m = normalized.match(/^(\d{4})-?(\d{1,2})$/);
-          if (m) {
-            const year = m[1];
-            const month = String(Number(m[2])).padStart(2, '0');
-            monthKey = `${year}-${month}`;
-          }
-        }
-        // 入力がなければ今月
-        if (!monthKey) {
-          monthKey = new Date().toISOString().slice(0, 7);
-        }
+    const currentTotal = parseInt(totalText, 10);
+    const fans = parseInt(fansText, 10);
 
-        const userId = interaction.user.id;
-        const username = interaction.user.username || interaction.user.tag;
+    if (Number.isNaN(currentTotal) || Number.isNaN(fans)) {
+      await interaction.editReply({
+        content: '数字を入力してください。',
+      });
+      return;
+    }
 
-        // これまでの「月間増加分」レコードを取得
-        const myMonthlyRecords = await getMonthlyRecordsByUser(userId);
-
-        // すでに同じ月の記録があればエラーにする
-        const already = myMonthlyRecords.find((r) => r.monthKey === monthKey);
-        if (already) {
-          await interaction.reply({
-            content: `対象月 ${monthKey} の記録はすでに登録されています。修正が必要な場合は、運営までご連絡ください。`,
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        // これまでの「増加分（grow）」の合計 = いままでの累計育成数
-        const previousTotal = myMonthlyRecords.reduce(
-          (sum, r) => sum + (r.grow || 0),
-          0,
-        );
-
-        const diff = currentTotal - previousTotal;
-
-        if (diff < 0) {
-          await interaction.reply({
-            content: [
-              '現在の育成数（累計）が、これまでの記録の合計より小さくなっています。',
-              '入力値をご確認ください。',
-            ].join('\n'),
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        // 保存するのは「今月の増加分（diff）」のまま
-        await appendMonthlyRecord(
-          userId,
-          username,
-          diff,
-          fans,
-          monthKey,
-        );
-
-        await interaction.reply({
-          content: [
-            '✅ 月間モチベを記録しました。',
-            `対象月: ${monthKey}`,
-            `今月の育成数（増加分）: ${diff}`,
-            `現在の累計育成数: ${currentTotal}`,
-            `ファン数: ${fans}`,
-          ].join('\n'),
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      } catch (err) {
-        console.error('motiMonthInputModal submit error:', err);
-
-        if (!interaction.replied && !interaction.deferred) {
-          try {
-            await interaction.reply({
-              content: '月間モチベの記録中にエラーが発生しました。時間をおいて再度お試しください。',
-              flags: MessageFlags.Ephemeral,
-            });
-          } catch (e) {
-            console.error('moti error reply failed:', e);
-          }
-        }
-        return;
+    // monthKey の正規化（YYYY-MM に寄せる）
+    let monthKey = '';
+    if (rawMonth) {
+      const normalized = rawMonth.replace(/[./]/g, '-');
+      const m = normalized.match(/^(\d{4})-?(\d{1,2})$/);
+      if (m) {
+        const year = m[1];
+        const month = String(Number(m[2])).padStart(2, '0');
+        monthKey = `${year}-${month}`;
       }
     }
+    // 入力がなければ今月
+    if (!monthKey) {
+      monthKey = new Date().toISOString().slice(0, 7);
     }
 
+    const userId = interaction.user.id;
+    const username = interaction.user.username || interaction.user.tag;
+
+    // これまでの「月間増加分」レコードを取得
+    const myMonthlyRecords = await getMonthlyRecordsByUser(userId);
+
+    // すでに同じ月の記録があればエラーにする
+    const already = myMonthlyRecords.find((r) => r.monthKey === monthKey);
+    if (already) {
+      await interaction.editReply({
+        content: `対象月 ${monthKey} の記録はすでに登録されています。修正が必要な場合は、運営までご連絡ください。`,
+      });
+      return;
+    }
+
+    // これまでの「増加分（grow）」の合計 = いままでの累計育成数
+    const previousTotal = myMonthlyRecords.reduce(
+      (sum, r) => sum + (r.grow || 0),
+      0,
+    );
+
+    const diff = currentTotal - previousTotal;
+
+    if (diff < 0) {
+      await interaction.editReply({
+        content: [
+          '現在の育成数（累計）が、これまでの記録の合計より小さくなっています。',
+          '入力値をご確認ください。',
+        ].join('\n'),
+      });
+      return;
+    }
+
+    // 保存するのは「今月の増加分（diff）」のまま
+    await appendMonthlyRecord(
+      userId,
+      username,
+      diff,
+      fans,
+      monthKey,
+    );
+
+    await interaction.editReply({
+      content: [
+        '✅ 月間モチベを記録しました。',
+        `対象月: ${monthKey}`,
+        `今月の育成数（増加分）: ${diff}`,
+        `現在の累計育成数: ${currentTotal}`,
+        `ファン数: ${fans}`,
+      ].join('\n'),
+    });
+    return;
+  } catch (err) {
+    console.error('motiMonthInputModal submit error:', err);
+
+    try {
+      await interaction.editReply({
+        content: '月間モチベの記録中にエラーが発生しました。時間をおいて再度お試しください。',
+      });
+    } catch (e) {
+      console.error('moti error reply failed:', e);
+    }
+    return;
+   }
+  }
+ }
+ 
  });
 
 
