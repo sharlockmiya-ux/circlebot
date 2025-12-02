@@ -469,9 +469,9 @@ function setupMotiMonthlyReminder(client) {
       timezone: 'Asia/Tokyo',
     },
   );
-    // 毎月4日 21:00 に「月間モチベ未入力者へのDMリマインド」を実行
+    // 毎月3日 21:00 に「月間モチベ未入力者へのDMリマインド」を実行
   cron.schedule(
-    '0 21 4 * *',
+    '0 21 3 * *',
     () => runMonthlyDmReminder(client, {}),
     {
       timezone: 'Asia/Tokyo',
