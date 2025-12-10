@@ -100,30 +100,55 @@ async function runMonthlyDmReminder(client, opts = {}) {
 
     console.log(`[moti] month DM remind done: success=${successIds.length}, failed=${failedIds.length}`);
 
-    // 🔔 結果を指定チャンネルにレポート
-    try {
-      if (MOTI_DM_LOG_CHANNEL_ID) {
-        const logChannel = await client.channels.fetch(MOTI_DM_LOG_CHANNEL_ID);
-        if (logChannel && logChannel.isTextBased()) {
-          const lines = [
-            '【月間モチベ自動DMレポート】',
-            `対象月: **${monthKey}**`,
-            `対象メンバー数: ${targets.size}`,
-            `送信成功: ${successIds.length}件`,
-            `送信失敗: ${failedIds.length}件`,
-          ];
+     // 🔔 結果を指定チャンネルにレポート
+try {
+  if (MOTI_DM_LOG_CHANNEL_ID) {
+    const logChannel = await client.channels.fetch(MOTI_DM_LOG_CHANNEL_ID);
+    if (logChannel && logChannel.isTextBased()) {
 
-          if (failedIds.length) {
-            const mentions = failedIds.map(id => `<@${id}>`).join(', ');
-            lines.push('', `DM送信に失敗したメンバー: ${mentions}`);
-          }
+      // targets が Set の想定
+      // member / user / id 文字列 どれでも拾えるようにする（堅牢版）
+      const targetIds = Array.from(targets)
+        .map(v => {
+          if (typeof v === 'string') return v;
+          return v?.id || v?.user?.id || null;
+        })
+        .filter(Boolean);
 
-          await logChannel.send(lines.join('\n'));
-        }
-      }
-    } catch (logErr) {
-      console.error('[moti] month DM log send failed:', logErr);
+      const formatMentions = (ids, label) => {
+        if (!ids || ids.length === 0) return null;
+        const limit = 20;
+        const head = ids.slice(0, limit).map(id => `<@${id}>`).join(', ');
+        const rest = ids.length - limit;
+        return `${label}: ${head}${rest > 0 ? ` …他${rest}名` : ''}`;
+      };
+
+      const lines = [
+        '【月間モチベ自動DMレポート】',
+        `対象月: **${monthKey}**`,
+        `対象メンバー数: ${targets.size}`,
+        `送信成功: ${successIds.length}件`,
+        `送信失敗: ${failedIds.length}件`,
+      ];
+
+      // 対象者一覧
+      const targetLine = formatMentions(targetIds, '今回のDM対象者');
+      if (targetLine) lines.push('', targetLine);
+
+      // 成功者一覧
+      const successLine = formatMentions(successIds, 'DM送信に成功したメンバー');
+      if (successLine) lines.push('', successLine);
+
+      // 失敗者一覧
+      const failedLine = formatMentions(failedIds, 'DM送信に失敗したメンバー');
+      if (failedLine) lines.push('', failedLine);
+
+      await logChannel.send(lines.join('\n'));
     }
+  }
+} catch (logErr) {
+  console.error('[moti] month DM log send failed:', logErr);
+}
 
     return {
       monthKey,
@@ -150,8 +175,9 @@ const MOTI_NOTICE_CHANNEL_ID = process.env.MOTI_NOTICE_CHANNEL_ID;
 const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID; 
 
 // 月間モチベ自動DMの結果を投稿するチャンネル
-const MOTI_DM_LOG_CHANNEL_ID = '1431975383242113066';
-
+const MOTI_DM_LOG_CHANNEL_ID =
+  process.env.MOTI_DM_LOG_CHANNEL_ID || '1431975383242113066';
+  
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -170,8 +196,9 @@ const VC_ONLINE_SOUND_PATH = path.join(__dirname, 'sounds', 'online.mp3');
 const TOKEN = process.env.DISCORD_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
-// ==== VC監視設定 ====
+// ===== VC監視設定 =====
 const VC_LOG_CHANNEL_ID = process.env.VC_LOG_CHANNEL_ID || null;
+
 const VC_TARGET_CHANNELS = (process.env.VC_TARGET_CHANNELS || '')
   .split(',')
   .map(id => id.trim())
@@ -179,8 +206,30 @@ const VC_TARGET_CHANNELS = (process.env.VC_TARGET_CHANNELS || '')
 
 const VC_PLAY_ONLINE_SOUND = (process.env.VC_PLAY_ONLINE_SOUND === 'true');
 
-// VCごとの「元のチャンネル名」を覚えておく（0人になったら戻す用）
+// ★ 追加：VCの“元の名前”を固定で持たせる（再起動対策）
+const VC_BASE_NAME_MAP = (() => {
+  try {
+    return JSON.parse(process.env.VC_BASE_NAME_MAP || '{}');
+  } catch {
+    console.warn('VC_BASE_NAME_MAP の JSON が不正です。{} として扱います。');
+    return {};
+  }
+})();
+
+// REC名判定（あなたの命名規則に合わせた完全一致）
+const isRecName = (name) => /^🎙️｜🔴REC：会話中\d+名$/.test(name);
+
+// メモリ保険（固定名がないVCのため）
 const originalVcNames = new Map();
+
+// ★ 安全な書き方（1行の明示return）
+const getBaseName = (vc) => {
+  return VC_BASE_NAME_MAP[vc.id]
+    || originalVcNames.get(vc.id)
+    || vc.name;
+};
+
+
 
 // === VCログ自動削除（3日経ったログを消す） ===
 const VC_LOG_MESSAGE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3日
@@ -406,7 +455,7 @@ function setupMotiMonthlyReminder(client) {
           .setDescription([
             '今月もサークル運営へのご協力をありがとうございます。',
             '本サークルでは、活動状況を把握しやすくするため、',
-            '【月間調査（必須）】と【コンテスト成績の任意入力】を実施しております。',
+            '【月間調査（必須）】と【コンテスト成績入力（任意）】を実施しております。',
             'お手数をおかけいたしますが、下記の要領でのご入力をお願いいたします。',
           ].join('\n'))
           .addFields(
@@ -526,6 +575,19 @@ client.once(Events.ClientReady, async (clientReady) => {
   setInterval(() => cleanupOldVcLogs(client), 3 * 60 * 60 * 1000);
   cleanupOldVcLogs(client);
   
+// ★ 追加：起動時に監視対象VCの元名を確保（再起動後の復元精度UP）
+for (const vcId of VC_TARGET_CHANNELS) {
+  const ch = await client.channels.fetch(vcId).catch(() => null);
+  if (ch && ch.isVoiceBased()) {
+    const baseFromConfig = VC_BASE_NAME_MAP[vcId];
+    if (baseFromConfig) {
+      originalVcNames.set(vcId, baseFromConfig);
+    } else if (!isRecName(ch.name)) {
+      originalVcNames.set(vcId, ch.name);
+    }
+  }
+}
+
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
     if (!channel) return console.error("❌ チャンネルが見つかりません。");
@@ -883,13 +945,17 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     const vc = guild.channels.cache.get(vcId);
     if (!vc || vc.type !== 2) continue; // 2 = ボイスチャンネル
 
-    // 元の名前を保存
-    if (!originalVcNames.has(vc.id)) {
-      originalVcNames.set(vc.id, vc.name);
-    }
+if (!originalVcNames.has(vc.id)) {
+  const baseFromConfig = VC_BASE_NAME_MAP[vc.id];
+  if (baseFromConfig) {
+    originalVcNames.set(vc.id, baseFromConfig);
+  } else if (!isRecName(vc.name)) {
+    originalVcNames.set(vc.id, vc.name);
+  }
+}
 
-    const humanCount = vc.members.filter(m => !m.user.bot).size;
-    const baseName   = originalVcNames.get(vc.id) || vc.name;
+const baseName = getBaseName(vc);
+
 
     // === 1) このVCに「入った」ケース ===
     if (afterId === vcId && beforeId !== vcId) {
@@ -982,6 +1048,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         // チャンネル名を元に戻す
         try {
           await vc.setName(baseName);
+          originalVcNames.delete(vc.id);
         } catch (err) {
           console.error('VC名変更エラー(終了):', err);
         }
@@ -1823,8 +1890,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
             '・月ごとのモチベーション（育成数・ファン数）',
             'を記録・振り返りするためのものです。',
             '',
-            'まずは `/moti_input` でシーズン成績を、',
-            '必要に応じて `/moti_month_input` で月間モチベを記録してください。',
+            'まずは `/moti_month_input` で月ごとの成績を、',
+            '必要に応じて `/moti_input` でコンテスト成績を記録してください。',
           ].join('\n'))
           .addFields(
             {
@@ -1849,7 +1916,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               ].join('\n'),
             },
             {
-              name: '📅 月間モチベ調査（任意参加）',
+              name: '📅 月間モチベ調査（提出必須）',
               value: [
                 '**`/moti_month_input` – 月間モチベの記録**',
                 '∥ 「1ヶ月でどれくらい育成したか」「どれくらいファンが増えたか」を記録します。',
@@ -2065,6 +2132,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
+    
  });
 
 // ===== Botログイン =====
