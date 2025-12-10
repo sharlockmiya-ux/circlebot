@@ -919,6 +919,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 // === VC入室／退出監視（複数VC対応 + Embedログ + REC表示 + オプション音声） ===
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+  try {
   // 設定がなければ何もしない
   if (!VC_TARGET_CHANNELS.length || !VC_LOG_CHANNEL_ID) return;
 
@@ -955,6 +956,7 @@ if (!originalVcNames.has(vc.id)) {
 }
 
 const baseName = getBaseName(vc);
+const humanCount = vc.members.filter(m => !m.user.bot).size;
 
 
     // === 1) このVCに「入った」ケース ===
@@ -1064,7 +1066,7 @@ const baseName = getBaseName(vc);
                 `現在：**${humanCount}名**`,
               ].join('\n')
             )
-            .setTimestamp();
+          .setTimestamp();
           await logChannel.send({ embeds: [leaveEmbed] });
         }
 
@@ -1076,7 +1078,11 @@ const baseName = getBaseName(vc);
       }
     }
   }
+  } catch (err) {
+    console.error('[vc] voiceStateUpdate error:', err);
+  }
 });
+
 
 
 client.on(Events.InteractionCreate, async (interaction) => {
