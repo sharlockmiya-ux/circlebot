@@ -785,6 +785,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // デバッグ用：どのボタンが押されたかログに出す
     console.log('Button pressed:', interaction.customId);
 
+    // ★ 追加：3秒制限回避（Unknown interaction対策）
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     // --- パターン1: 赤/緑スイッチ用（role_on:<id> / role_off:<id>） ---
     const mForce = interaction.customId.match(/^role_(on|off):(\d{17,20})$/);
     if (mForce) {
@@ -806,8 +809,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     // 対応していないボタン
     if (!roleId) {
-      await interaction.reply({
-        flags: MessageFlags.Ephemeral,
+      await interaction.editReply({
         content: '⚠️ このボタンは現在使用できません。最新のパネルでお試しください。',
       });
       return;
@@ -819,8 +821,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       try { role = await interaction.guild.roles.fetch(roleId); } catch {}
     }
     if (!role) {
-      await interaction.reply({
-        flags: MessageFlags.Ephemeral,
+      await interaction.editReply({
         content: '⚠️ ロールが見つかりません。運営に連絡してください。',
       });
       return;
@@ -829,15 +830,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // 権限 & 並び順チェック
     const me = await interaction.guild.members.fetchMe();
     if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-      await interaction.reply({
-        flags: MessageFlags.Ephemeral,
+      await interaction.editReply({
         content: '⚠️ Botに「ロールの管理」権限がありません。',
       });
       return;
     }
     if (role.position >= me.roles.highest.position) {
-      await interaction.reply({
-        flags: MessageFlags.Ephemeral,
+      await interaction.editReply({
         content: '⚠️ ただいまロール設定を更新中です。少し待ってから再度お試しください。',
       });
       return;
@@ -891,15 +890,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         .setDescription(lines.join('\n'))
         .setFooter({ text: 'ボタンを押すたびに、この一覧も更新されます。' });
 
-      await interaction.reply({
-        flags: MessageFlags.Ephemeral,
+      await interaction.editReply({
         content: replyText,
         embeds: [embed],
       });
     } else {
       // お知らせロールなど通常ロールはテキストのみ
-      await interaction.reply({
-        flags: MessageFlags.Ephemeral,
+      await interaction.editReply({
         content: replyText,
       });
     }
@@ -907,7 +904,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
   } catch (e) {
     console.error('interaction error:', e);
     try {
-      if (!interaction.replied) {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({
+          content: '❌ エラーが発生しました。時間をおいて再度お試しください。',
+        });
+      } else {
         await interaction.reply({
           flags: MessageFlags.Ephemeral,
           content: '❌ エラーが発生しました。時間をおいて再度お試しください。',
@@ -916,6 +917,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } catch {}
   }
 });
+
 
 // === VC入室／退出監視（複数VC対応 + Embedログ + REC表示 + オプション音声） ===
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
