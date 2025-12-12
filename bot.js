@@ -774,6 +774,7 @@ ${SEP}`
   }
 });
 
+
 // === ボタン押下：ロール付与/解除（トグル＋ON/OFFボタン＋アイドル個別Embed）===
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
