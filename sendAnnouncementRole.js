@@ -11,11 +11,17 @@ const {
   ButtonStyle,
 } = require('discord.js');
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const CHANNEL_ID = process.env.ROLEPANEL_CHANNEL_ID; // アイドルロールと同じチャンネル
+// ★新：サーバー設定（ID類）をconfigから読む
+const { must, loadServerConfig } = require('./src/config');
 
-// 🔔 お知らせロールID
-const ANNOUNCE_ROLE_ID = '1435924112160587856';
+const TOKEN = must('DISCORD_TOKEN');
+const cfg = loadServerConfig();
+
+// 送信先チャンネルID（優先：config / 互換：env）
+const CHANNEL_ID = cfg.channels?.rolepanel || process.env.ROLEPANEL_CHANNEL_ID; // アイドルロールと同じチャンネル
+
+// 🔔 お知らせロールID（優先：config / 互換：直書きフォールバック）
+const ANNOUNCE_ROLE_ID = cfg.roles?.announcement || '1435924112160587856';
 
 if (!TOKEN || !CHANNEL_ID || !ANNOUNCE_ROLE_ID) {
   console.error('❌ DISCORD_TOKEN / ROLEPANEL_CHANNEL_ID / ANNOUNCE_ROLE_ID のいずれかが不足しています。');
@@ -30,6 +36,7 @@ client.once('ready', async () => {
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
     if (!channel) throw new Error('チャンネルが見つかりません');
+    if (!channel.isTextBased || !channel.isTextBased()) throw new Error('チャンネルが見つかりません');
 
     const embed = new EmbedBuilder()
       .setColor(0xFEE75C)

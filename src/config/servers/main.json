@@ -1,0 +1,20 @@
+{
+  "name": "main",
+  "guildId": "1431896098036781171",
+  "channels": {
+    "log": "1431975383242113066",
+    "rolepanel": "1433797341642489936",
+    "announce": "",
+    "vcTextNotify": ""
+  },
+  "roles": {
+    "announcement": "1435924112160587856",
+    "engineer": "1435677519075610634"
+  },
+  "messages": {
+    "roleEmbedMessageId": "1434168544097996912"
+  },
+  "assets": {
+    "onlineMp3": "assets/sounds/online.mp3"
+  }
+}

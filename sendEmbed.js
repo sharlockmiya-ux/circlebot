@@ -1,11 +1,15 @@
+// sendEmbed.js
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 require('dotenv').config();
 
-const TOKEN = process.env.DISCORD_TOKEN;
+const { must, loadServerConfig } = require('./src/config');
 
-// === 宛先設定 ===
+const TOKEN = must('DISCORD_TOKEN');
+const cfg = loadServerConfig();
+
+// === 宛先設定（優先：config / 互換：env） ===
 const DESTS = {
-  role: process.env.ROLEPANEL_CHANNEL_ID, // ロールチャンネル
+  role: cfg.channels?.rolepanel || process.env.ROLEPANEL_CHANNEL_ID, // ロールチャンネル
 };
 
 // === 実行コマンドの引数 ===
@@ -22,15 +26,20 @@ if (!channelId) {
   process.exit(1);
 }
 
-// === Embed メッセージ内容 ===
+// === role IDs（優先：config / 互換：元ID） ===
+const ADMIN_ROLE_ID = cfg.roles?.admin || '1434074658059190343';
+const SUBLEADER_ROLE_ID = cfg.roles?.subLeader || '1432727570419548323';
+const OPERATOR_ROLE_ID = cfg.roles?.operator || '1431975448119607316';
+
+// === Embed メッセージ内容（本文不変） ===
 const embed = new EmbedBuilder()
   .setColor(0x5865f2)
   .setTitle("**【ロール紹介】**")
   .setDescription([
     "↓ **運営ロール** ↓",
-    "<@&1434074658059190343>\n> 最高管理およびサークル意思決定者",
-    "<@&1432727570419548323>\n> リーダー代理",
-    "<@&1431975448119607316>\n> サークルの業務遂行者",
+    `<@&${ADMIN_ROLE_ID}>\n> 最高管理およびサークル意思決定者`,
+    `<@&${SUBLEADER_ROLE_ID}>\n> リーダー代理`,
+    `<@&${OPERATOR_ROLE_ID}>\n> サークルの業務遂行者`,
     "",
     "↓ **各アイドルロール** ↓",
     "各ロールは対応するアイドルを選択すると自動付与されます。"
@@ -47,6 +56,7 @@ client.once('ready', async () => {
   try {
     const channel = await client.channels.fetch(channelId);
     if (!channel) throw new Error('チャンネルが見つかりません');
+    if (!channel.isTextBased || !channel.isTextBased()) throw new Error('チャンネルが見つかりません');
 
     await channel.send({ embeds: [embed] });
     console.log(`✅ 送信成功: ${channelId}`);

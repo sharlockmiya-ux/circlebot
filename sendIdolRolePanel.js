@@ -13,8 +13,13 @@ const {
   Events,
 } = require('discord.js');
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const ROLEPANEL_CHANNEL_ID = process.env.ROLEPANEL_CHANNEL_ID; // ← 例: 1433797341642489936
+const { must, loadServerConfig } = require('./src/config');
+
+const TOKEN = must('DISCORD_TOKEN');
+const cfg = loadServerConfig();
+
+// 送信先（優先：config / 互換：env）
+const ROLEPANEL_CHANNEL_ID = cfg.channels?.rolepanel || process.env.ROLEPANEL_CHANNEL_ID;
 
 if (!TOKEN || !ROLEPANEL_CHANNEL_ID) {
   console.error('❌ .env に DISCORD_TOKEN または ROLEPANEL_CHANNEL_ID が設定されていません。');
@@ -51,8 +56,12 @@ client.once(Events.ClientReady, async () => {
       console.error('❌ ROLEPANEL_CHANNEL_ID のチャンネルが見つかりません。');
       process.exit(1);
     }
+    if (!channel.isTextBased || !channel.isTextBased()) {
+      console.error('❌ ROLEPANEL_CHANNEL_ID のチャンネルがテキストチャンネルではありません。');
+      process.exit(1);
+    }
 
-    // パネルの説明Embed
+    // パネルの説明Embed（本文不変）
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle('✅ 担当アイドルロール')
@@ -90,7 +99,6 @@ client.once(Events.ClientReady, async () => {
   } catch (err) {
     console.error('❌ パネル送信中にエラーが発生しました:', err);
   } finally {
-    // 一度メッセージを送ったら終了
     client.destroy();
   }
 });
