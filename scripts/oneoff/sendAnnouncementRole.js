@@ -1,4 +1,4 @@
-// sendAnnouncementRole.js
+﻿// sendAnnouncementRole.js
 // お知らせロール付与パネルを「ロールチャンネル」に一度だけ送信する専用スクリプト
 
 require('dotenv').config();
@@ -9,10 +9,11 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  Events,
 } = require('discord.js');
 
 // ★新：サーバー設定（ID類）をconfigから読む
-const { must, loadServerConfig } = require('./src/config');
+const { must, loadServerConfig } = require('../../src/config');
 
 const TOKEN = must('DISCORD_TOKEN');
 const cfg = loadServerConfig();
@@ -30,7 +31,7 @@ if (!TOKEN || !CHANNEL_ID || !ANNOUNCE_ROLE_ID) {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
   console.log(`✅ ログイン完了: ${client.user.tag}`);
 
   try {

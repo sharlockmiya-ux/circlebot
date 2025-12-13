@@ -1,4 +1,4 @@
-// sendIdolRolePanel.js
+﻿// sendIdolRolePanel.js
 // アイドル担当ロールパネルを一度だけ送信する専用スクリプト
 
 require('dotenv').config();
@@ -13,7 +13,7 @@ const {
   Events,
 } = require('discord.js');
 
-const { must, loadServerConfig } = require('./src/config');
+const { must, loadServerConfig } = require('../../src/config');
 
 const TOKEN = must('DISCORD_TOKEN');
 const cfg = loadServerConfig();

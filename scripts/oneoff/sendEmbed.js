@@ -1,8 +1,8 @@
-// sendEmbed.js
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+﻿// sendEmbed.js
+const { Client, GatewayIntentBits,  EmbedBuilder, Events } = require('discord.js');
 require('dotenv').config();
 
-const { must, loadServerConfig } = require('./src/config');
+const { must, loadServerConfig } = require('../../src/config');
 
 const TOKEN = must('DISCORD_TOKEN');
 const cfg = loadServerConfig();
@@ -50,7 +50,7 @@ const embed = new EmbedBuilder()
 // === Botクライアント起動 ===
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
   console.log(`✅ ログイン完了: ${client.user.tag}`);
 
   try {
