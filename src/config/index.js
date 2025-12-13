@@ -11,7 +11,7 @@ function must(envKey) {
 }
 
 function loadServerConfig() {
-  const profile = process.env.SERVER_PROFILE || 'main';
+  const profile = process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main';
   const filePath = path.join(__dirname, 'servers', `${profile}.json`);
 
   if (!fs.existsSync(filePath)) {

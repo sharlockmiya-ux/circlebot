@@ -60,11 +60,11 @@ function parseSeasonNumber(season) {
 
 
 const CURRENT_SEASON = process.env.MOTI_CURRENT_SEASON || 'S35';
-const MOTI_NOTICE_CHANNEL_ID = process.env.MOTI_NOTICE_CHANNEL_ID;
-const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || cfg.guildId;
+const MOTI_NOTICE_CHANNEL_ID = cfg.channels?.motiNotice || null;
+const MAIN_GUILD_ID = cfg.guildId;
 
 // 月間モチベ自動DMの結果を投稿するチャンネル
-const MOTI_DM_LOG_CHANNEL_ID = process.env.MOTI_DM_LOG_CHANNEL_ID || null;
+const MOTI_DM_LOG_CHANNEL_ID = cfg.channels?.log || null;
 
 // === VC監視（v15 events化） ===
 const {
@@ -73,7 +73,7 @@ const {
 } = require('./src/events/voiceStateUpdate');
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const CHANNEL_ID = process.env.CHANNEL_ID || cfg.channels?.rulesSummary;
+const CHANNEL_ID = cfg.channels?.rulesSummary;
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
 
