@@ -9,7 +9,7 @@ const cfg = loadServerConfig();
 
 // === 宛先設定（優先：config / 互換：env） ===
 const DESTS = {
-  role: cfg.channels?.rolepanel || process.env.ROLEPANEL_CHANNEL_ID, // ロールチャンネル
+  role: cfg.channels?.rolepanel, // ロールチャンネル
 };
 
 // === 実行コマンドの引数 ===
@@ -27,9 +27,14 @@ if (!channelId) {
 }
 
 // === role IDs（優先：config / 互換：元ID） ===
-const ADMIN_ROLE_ID = cfg.roles?.admin || '1434074658059190343';
-const SUBLEADER_ROLE_ID = cfg.roles?.subLeader || '1432727570419548323';
-const OPERATOR_ROLE_ID = cfg.roles?.operator || '1431975448119607316';
+const ADMIN_ROLE_ID = cfg.roles?.admin;
+const SUBLEADER_ROLE_ID = cfg.roles?.subLeader;
+const OPERATOR_ROLE_ID = cfg.roles?.operator;
+
+if (!ADMIN_ROLE_ID || !SUBLEADER_ROLE_ID || !OPERATOR_ROLE_ID) {
+  console.error('❌ config.roles.admin / subLeader / operator のいずれかが不足しています。');
+  process.exit(1);
+}
 
 // === Embed メッセージ内容（本文不変） ===
 const embed = new EmbedBuilder()

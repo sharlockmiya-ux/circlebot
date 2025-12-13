@@ -29,6 +29,11 @@ const {
   MessageFlags,
 } = require('discord.js');
 
+// ③ サーバー固有のIDは config から読む（移行・運用を簡単にするため）
+const { loadServerConfig } = require('./src/config');
+const cfg = loadServerConfig();
+
+
 
 
 const {
@@ -56,7 +61,7 @@ function parseSeasonNumber(season) {
 
 const CURRENT_SEASON = process.env.MOTI_CURRENT_SEASON || 'S35';
 const MOTI_NOTICE_CHANNEL_ID = process.env.MOTI_NOTICE_CHANNEL_ID;
-const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID; 
+const MAIN_GUILD_ID = process.env.MAIN_GUILD_ID || cfg.guildId;
 
 // 月間モチベ自動DMの結果を投稿するチャンネル
 const MOTI_DM_LOG_CHANNEL_ID = process.env.MOTI_DM_LOG_CHANNEL_ID || null;
@@ -68,7 +73,7 @@ const {
 } = require('./src/events/voiceStateUpdate');
 
 const TOKEN = process.env.DISCORD_TOKEN;
-const CHANNEL_ID = process.env.CHANNEL_ID;
+const CHANNEL_ID = process.env.CHANNEL_ID || cfg.channels?.rulesSummary;
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
 
@@ -220,7 +225,7 @@ async function buildSeasonSummaryForUser(userId, username, limitSeasons) {
 // ※ cleanupOldVcLogs は src/features/vc/vcMonitor に移動
 
 if (!TOKEN || !CHANNEL_ID) {
-  console.error("❌ .env に DISCORD_TOKEN または CHANNEL_ID がありません。");
+  console.error("❌ DISCORD_TOKEN または送信先チャンネルID（CHANNEL_ID / config.channels.rulesSummary）がありません。");
   process.exit(1);
 }
 
@@ -238,39 +243,17 @@ registerVoiceStateUpdate(client);
 const { setupMotiMonthlyReminder } = require('./src/features/moti/scheduler');
 
 const { handleRoleButtonInteraction } = require('./src/features/roles/roleButtonHandler');
-// === ロールボタン設定 ===
-const ROLE_BUTTONS = [
-  { label: '花海咲季', roleId: '1433209432581341305', customId: 'role_hanamizaki' },
-  { label: '月村手毬', roleId: '1433331636514062447', customId: 'role_tsukimura' },
-  { label: '藤田ことね', roleId: '1433332410623328398', customId: 'role_fujita' },
-  { label: '有村麻央', roleId: '1433332920667476068', customId: 'role_arimura' },
-  { label: '葛城リーリヤ', roleId: '1433333171453169794', customId: 'role_katsuragi' },
-  { label: '倉本千奈', roleId: '1433333415947669534', customId: 'role_kuramoto' },
-  { label: '紫雲清夏', roleId: '1433333595694563429', customId: 'role_shiun' },
-  { label: '篠澤広', roleId: '1433333784270606428', customId: 'role_shinozawa' },
-  { label: '姫崎莉波', roleId: '1433333959378604104', customId: 'role_himezaki' },
-  { label: '花海佑芽', roleId: '1433334170721189989', customId: 'role_hanamiyume' },
-  { label: '秦谷美鈴', roleId: '1433334387252138015', customId: 'role_hataya' },
-  { label: '十王星南', roleId: '1433334591179063316', customId: 'role_juuo' },
-  { label: '雨夜燕', roleId: '1433334807441702952', customId: 'role_amayo' }
-];
+// === ロールボタン設定（IDは config に集約）===
+const IDOL_DEFS = cfg.roles?.idols;
+if (!Array.isArray(IDOL_DEFS) || IDOL_DEFS.length === 0) {
+  console.error('❌ server config に roles.idols がありません。');
+  process.exit(1);
+}
 
-// === アイドルロール一覧（個別Embed表示用・絵文字なし） ===
-const IDOL_ROLES = [
-  { id: '1433209432581341305', name: '花海咲季' },
-  { id: '1433331636514062447', name: '月村手毬' },
-  { id: '1433332410623328398', name: '藤田ことね' },
-  { id: '1433332920667476068', name: '有村麻央' },
-  { id: '1433333171453169794', name: '葛城リーリヤ' },
-  { id: '1433333415947669534', name: '倉本千奈' },
-  { id: '1433333595694563429', name: '紫雲清夏' },
-  { id: '1433333784270606428', name: '篠澤広' },
-  { id: '1433333959378604104', name: '姫崎莉波' },
-  { id: '1433334170721189989', name: '花海佑芽' },
-  { id: '1433334387252138015', name: '秦谷美鈴' },
-  { id: '1433334591179063316', name: '十王星南' },
-  { id: '1433334807441702952', name: '雨夜燕' }
-];
+const ROLE_BUTTONS = IDOL_DEFS.map(({ label, roleId, customId }) => ({ label, roleId, customId }));
+
+// === アイドルロール一覧（個別Embed表示用・絵文字なし）===
+const IDOL_ROLES = IDOL_DEFS.map(({ label, roleId }) => ({ id: roleId, name: label }));
 
 const IDOL_ROLE_ID_SET = new Set(IDOL_ROLES.map(r => r.id));
 
@@ -308,6 +291,7 @@ try {
       );
 
     // --- Embed2：提携・目安箱・お問い合わせ ---
+    const inquiryUrl = `https://discord.com/channels/${cfg.guildId}/${cfg.channels.inquiry}`;
     const embed2 = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle("🤝 提携サークル（チケット教団）・📮 目安箱・📨 お問い合わせ")
@@ -361,100 +345,104 @@ try {
 
 💬 **お問い合わせ**
 対話形式で相談したい場合は  
-📎 [#お問い合わせ](https://discord.com/channels/1431896098036781171/1433797414598479922)  
+📎 [#お問い合わせ](${inquiryUrl})  
 よりチャンネルを開いてください。運営人と直接会話が可能になります。`
       );
 
     // --- Embed3：チャンネル案内（分割対応） ---
     const SEP = '▶︎┄┄┄┄┄┄┄┄┄┄┄◀︎';
+    const m = (id) => `<#${id}>`;
+    const ch = cfg.channels || {};
+    const g = (ch.guide || {});
     const embed3 = new EmbedBuilder()
       .setColor(0x2f3136)
       .setTitle("📚 サーバー各チャンネルの利用方法（案内）")
       .setDescription(
 `
+
 以下は各チャンネルの用途をまとめたものです。`
       )
       .addFields(
         {
           name: '\u200B',
           value:
-`<#1431904100081205268>
+`${m(ch.rulesSummary)}
 > ルール等のまとめ  
-<#1433797341642489936>
+${m(ch.rolepanel)}
 > 担当アイドルのロールを自分に追加  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1431896098674577459>
+`${m(g.newMemberNotify)}
 > 新しく入られた方の通知  
-<#1431903913833009253>
+${m(g.selfIntro)}
 > 自己紹介を投稿  
-<#1431896098674577460>
+${m(g.contact)}
 > 運営からの連絡（**新メンバー加入アンケートは重要**）  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1431902505209696256>
+`${m(g.gakumasChat)}
 > 学マスに関する雑談  
-<#1431902551124742205>
+${m(g.evaluationStrategy)}
 > 評価値の攻略情報  
-<#1431902589590704129>
+${m(g.formationShare)}
 > 編成／シナリオ攻略共有（**有用情報歓迎**）  
-<#1431902622318596167>
+${m(g.reportCard)}
 > 各メンバーの通知表（約1か月ごと更新）  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1431902822953385984>
+`${m(g.contestChat)}
 > コンテストに関する雑談  
-<#1432388076256231516>
+${m(g.scoreTool)}
 > スクショを貼るだけで必要スコアを可視化  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1431902969795706941>
+`${m(g.simulationShare)}
 > シミュレーション結果共有  
-<#1431902996060700813>
+${m(g.produceFormationShare)}
 > プロデュース編成の共有（育成時の参考）  
-<#1431903020517425332>
+${m(g.rehearsalAveShare)}
 > リハーサルの ave 共有（秘密事項）  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1431901093612486738>
+`${m(g.voiceChat)}
 > ボイスチャット（参加自由）  
-<#1431901117205319742>
+${m(g.botSettings)}
 > BOT 設定変更用  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1431903789853708338>
+`${m(g.freeTalk)}
 > 雑談。常識の範囲で自由に  
-<#1431903815946211338>
+${m(g.otherGames)}
 > 他ゲーム談義  
-<#1431903867947319336>
+${m(g.foodTalk)}
 > 食の話題  
-<#1433797414598479922>
+${m(ch.inquiry)}
 > Ticket 用チャンネル（対話形式の相談）  
 ${SEP}`
         },
         {
           name: '\u200B',
           value:
-`<#1432335666959745044>
-> 各人のメモ保管庫。個人チャンネル設立をご希望の方は <#1433797414598479922> よりご連絡ください。`
+`${m(g.memoArchive)}
+> 各人のメモ保管庫。個人チャンネル設立をご希望の方は ${m(ch.inquiry)} よりご連絡ください。`
         }
       )
       .setFooter({ text: "迷ったら #連絡 / #お問い合わせ へ" })

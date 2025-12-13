@@ -19,29 +19,21 @@ const TOKEN = must('DISCORD_TOKEN');
 const cfg = loadServerConfig();
 
 // 送信先（優先：config / 互換：env）
-const ROLEPANEL_CHANNEL_ID = cfg.channels?.rolepanel || process.env.ROLEPANEL_CHANNEL_ID;
+const ROLEPANEL_CHANNEL_ID = cfg.channels?.rolepanel;
 
 if (!TOKEN || !ROLEPANEL_CHANNEL_ID) {
-  console.error('❌ .env に DISCORD_TOKEN または ROLEPANEL_CHANNEL_ID が設定されていません。');
+  console.error('❌ DISCORD_TOKEN または config.channels.rolepanel が設定されていません。');
   process.exit(1);
 }
 
-// アイドルロール（bot.js と同じ ID を使用）
-const IDOL_ROLES = [
-  { id: '1433209432581341305', name: '花海咲季' },
-  { id: '1433331636514062447', name: '月村手毬' },
-  { id: '1433332410623328398', name: '藤田ことね' },
-  { id: '1433332920667476068', name: '有村麻央' },
-  { id: '1433333171453169794', name: '葛城リーリヤ' },
-  { id: '1433333415947669534', name: '倉本千奈' },
-  { id: '1433333595694563429', name: '紫雲清夏' },
-  { id: '1433333784270606428', name: '篠澤広' },
-  { id: '1433333959378604104', name: '姫崎莉波' },
-  { id: '1433334170721189989', name: '花海佑芽' },
-  { id: '1433334387252138015', name: '秦谷美鈴' },
-  { id: '1433334591179063316', name: '十王星南' },
-  { id: '1433334807441702952', name: '雨夜燕' },
-];
+// アイドルロール（IDは server config に集約）
+const IDOL_DEFS = cfg.roles?.idols;
+if (!Array.isArray(IDOL_DEFS) || IDOL_DEFS.length === 0) {
+  console.error('❌ server config に roles.idols がありません。');
+  process.exit(1);
+}
+
+const IDOL_ROLES = IDOL_DEFS.map(({ label, roleId }) => ({ id: roleId, name: label }));
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],

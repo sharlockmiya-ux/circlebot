@@ -1,27 +1,35 @@
 // scripts/editRoleEmbed.js （改行調整バージョン）
 
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, Events } = require('discord.js');
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const CHANNEL_ID = process.env.ROLEPANEL_CHANNEL_ID;
-const MESSAGE_ID = '1434168544097996912';
+const { must, loadServerConfig } = require('../src/config');
+
+const TOKEN = must('DISCORD_TOKEN');
+const cfg = loadServerConfig();
+const CHANNEL_ID = cfg.channels?.rolepanel;
+const MESSAGE_ID = cfg.messages?.roleEmbedMessageId;
+
+if (!CHANNEL_ID || !MESSAGE_ID) {
+  console.error('❌ config.channels.rolepanel または config.messages.roleEmbedMessageId が不足しています。');
+  process.exit(1);
+}
 
 // 技術者ロールの行（変更なし）
 const NEW_BLOCK = [
-  '<@&1435677519075610634>',
+  '<@&' + cfg.roles.engineer + '>',
   '> サークルのテクニカルエキスパート。'
 ].join('\n');
 
 // 参謀ロール（この直後に入れる）
 const ANCHOR = [
-  '<@&1431975448119607316>',
+  '<@&' + cfg.roles.operator + '>',
   '> サークルの業務遂行者'
 ].join('\n');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
     const msg = await channel.messages.fetch(MESSAGE_ID);
@@ -47,3 +55,4 @@ client.once('ready', async () => {
 });
 
 client.login(TOKEN);
+

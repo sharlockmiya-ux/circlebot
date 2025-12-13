@@ -19,13 +19,13 @@ const TOKEN = must('DISCORD_TOKEN');
 const cfg = loadServerConfig();
 
 // 送信先チャンネルID（優先：config / 互換：env）
-const CHANNEL_ID = cfg.channels?.rolepanel || process.env.ROLEPANEL_CHANNEL_ID; // アイドルロールと同じチャンネル
+const CHANNEL_ID = cfg.channels?.rolepanel; // アイドルロールと同じチャンネル
 
 // 🔔 お知らせロールID（優先：config / 互換：直書きフォールバック）
-const ANNOUNCE_ROLE_ID = cfg.roles?.announcement || '1435924112160587856';
+const ANNOUNCE_ROLE_ID = cfg.roles?.announcement;
 
 if (!TOKEN || !CHANNEL_ID || !ANNOUNCE_ROLE_ID) {
-  console.error('❌ DISCORD_TOKEN / ROLEPANEL_CHANNEL_ID / ANNOUNCE_ROLE_ID のいずれかが不足しています。');
+  console.error('❌ DISCORD_TOKEN / config.channels.rolepanel / config.roles.announcement のいずれかが不足しています。');
   process.exit(1);
 }
 

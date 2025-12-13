@@ -100,3 +100,46 @@
 - 目的：**構造（配線・分割）を整えること**
 - 影響：機能の表面挙動は維持（本文変更なし）
 - リスク：同時起動（ローカル+Render等）による二重発火は運用で回避（既知）
+
+---
+
+## 8. 追加対応（運用スクリプト整理：oneoff集約）
+単発送信スクリプト（Embed送信・ロールパネル送信など）を `scripts/oneoff/` に集約し、
+「本体Botの構造」と「運用上の単発実行」を分離した。
+
+### 方針
+- スタブ（ルート直下の互換ファイル）は作らず、今後は `scripts/oneoff/` から実行する運用に統一する。
+
+### 実行コマンド（確定）
+- `node .\scripts\oneoff\sendEmbed.js <target>`
+- `node .\scripts\oneoff\sendIdolRolePanel.js`
+- `node .\scripts\oneoff\sendAnnouncementRole.js`
+
+### 変更点（要約）
+- `sendEmbed.js / sendIdolRolePanel.js / sendAnnouncementRole.js` は `scripts/oneoff/` へ移動
+- 移動に伴い `require('./src/config')` などの相対パスを `../../src/config` に修正
+- 単発送信スクリプト内の `ready` 系イベント登録を `Events.ClientReady` に統一し、将来（v15）互換の警告を解消
+- `ready` リスナーの二重登録を解消（「ログイン完了」ログが複数回出る事象を抑止）
+
+---
+
+## 9. 追加・移動・修正（oneoff分）
+### 移動（move）
+- `sendEmbed.js` → `scripts/oneoff/sendEmbed.js`
+- `sendIdolRolePanel.js` → `scripts/oneoff/sendIdolRolePanel.js`
+- `sendAnnouncementRole.js` → `scripts/oneoff/sendAnnouncementRole.js`
+
+### 修正（modify）
+- `scripts/oneoff/sendEmbed.js`
+- `scripts/oneoff/sendIdolRolePanel.js`
+- `scripts/oneoff/sendAnnouncementRole.js`
+  - config参照パス修正（`../../src/config`）
+  - `client.once('ready', ...)` → `client.once(Events.ClientReady, ...)`
+  - ready二重登録の解消（ログ重複を抑止）
+
+---
+
+## 10. 既知の注意点
+- Discordの Interaction エラー（例：40060: Interaction has already been acknowledged）は、
+  同一トークンでの二重起動（ローカル＋Render等）により再現する。
+  その場合は片方のプロセスを停止すること。
