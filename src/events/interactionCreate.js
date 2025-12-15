@@ -28,6 +28,16 @@ function registerInteractionCreate(client, ctx) {
       await handleMotiInteraction(interaction, { client, ...ctx });
     } catch (err) {
       console.error('❌ InteractionCreate error:', err);
+      // Discordの 50035 は details が重要なので、見える形で出す
+      try {
+        if (err && err.code === 50035) {
+          const raw = err.rawError || null;
+          const details = raw?.errors || raw;
+          console.error('❌ 50035 details:', JSON.stringify(details, null, 2));
+        }
+      } catch (_) {
+        // ignore
+      }
 
       // Interaction未応答のときだけ、落ちないように最小限の応答を試みる
       try {

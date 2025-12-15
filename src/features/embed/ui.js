@@ -71,7 +71,16 @@ function buildEmbedFromDraft(draft, { includeHints = false } = {}) {
 }
 
 function buildPreviewEmbed(draft) {
-  return buildEmbedFromDraft(draft, { includeHints: true });
+  const e = buildEmbedFromDraft(draft, { includeHints: true });
+
+  // Discord API: 空のEmbed（{}）は送信できず 50035 になる。
+  // 初期状態でもプレビューが表示できるように最低限の本文を入れる。
+  const json = e.toJSON();
+  if (!json || Object.keys(json).length === 0) {
+    e.setDescription('下のボタンから内容を編集してください。');
+  }
+
+  return e;
 }
 
 function buildFinalEmbed(draft) {

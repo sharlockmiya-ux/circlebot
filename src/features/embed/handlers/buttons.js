@@ -276,12 +276,24 @@ async function handleEmbedButtons(interaction, ctx) {
     const components = buildFinalComponents(draft);
     const content = draft.appendUrlsText ? draft.appendUrlsText : undefined;
 
-    try {
-      await channel.send({
-        content,
-        embeds: [embed],
-        components,
+    // Discord API: 空のEmbedは送れない（50035 Invalid Form Body）。
+    // content がある場合は embed を省略して送る。
+    const embedJson = embed.toJSON();
+    const isEmptyEmbed = !embedJson || Object.keys(embedJson).length === 0;
+
+    if (isEmptyEmbed && !content) {
+      await interaction.editReply({
+        content: '❌ 送信内容が空です。タイトル/本文などを入力してください。',
+        embeds: [],
+        components: [],
       });
+      return;
+    }
+
+    try {
+      const payload = { content, components };
+      if (!isEmptyEmbed) payload.embeds = [embed];
+      await channel.send(payload);
     } catch (err) {
       console.error('❌ /embed send error:', err);
       await interaction.editReply({
