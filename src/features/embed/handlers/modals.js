@@ -17,13 +17,19 @@ function safeUrlOrEmpty(url) {
   return isHttpUrl(u) ? u : '';
 }
 
+async function ensureDeferred(interaction) {
+  if (interaction.deferred || interaction.replied) return;
+  // モーダル submit は 3 秒以内に応答が必要。
+  // 入力が大きい場合でも Unknown interaction になりにくくするため、先に defer しておく。
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+}
+
 async function replyWithPanel(interaction, session) {
   const draft = session.draft;
   const embed = buildPreviewEmbed(draft);
   const components = buildBuilderComponents(draft);
 
-  await interaction.reply({
-    flags: MessageFlags.Ephemeral,
+  await interaction.editReply({
     embeds: [embed],
     components,
   });
@@ -39,6 +45,9 @@ async function handleEmbedModals(interaction, ctx) {
   const userId = interaction.user?.id;
 
   const session = getOrCreateSession(guildId, channelId, userId);
+
+  // 先に defer（3秒制限対策）
+  await ensureDeferred(interaction);
 
   // ===== basic =====
   if (interaction.customId === 'embed:modal:basic') {
@@ -105,6 +114,13 @@ async function handleEmbedModals(interaction, ctx) {
     await replyWithPanel(interaction, session);
     return;
   }
+
+  // 想定外（何もせず終わると Interaction failed になるので最低限返す）
+  await interaction.editReply({
+    content: '❌ エラーが発生しました。',
+    embeds: [],
+    components: [],
+  });
 }
 
 module.exports = { handleEmbedModals };
