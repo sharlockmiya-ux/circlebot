@@ -1,5 +1,11 @@
 // scripts/deployMotiCommands.js
+// v15方針：サーバー固有IDは src/config/servers/<name>.json から取得
+// secrets（DISCORD_TOKEN / CLIENT_ID）は env から取得
+
 require('dotenv').config();
+
+const fs = require('fs');
+const path = require('path');
 
 const {
   REST,
@@ -8,9 +14,73 @@ const {
   PermissionFlagsBits,
 } = require('discord.js');
 
+function readArgValue(flagName) {
+  const idx = process.argv.indexOf(flagName);
+  if (idx === -1) return null;
+  const v = process.argv[idx + 1];
+  if (!v || String(v).startsWith('-')) return null;
+  return v;
+}
+
+function listServerProfiles(serversDir) {
+  try {
+    return fs
+      .readdirSync(serversDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace(/\.json$/, ''));
+  } catch {
+    return [];
+  }
+}
+
+function loadServerConfig(profile) {
+  const serversDir = path.join(__dirname, '..', 'src', 'config', 'servers');
+  const filePath = path.join(serversDir, `${profile}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    const profiles = listServerProfiles(serversDir);
+    const hint = profiles.length ? `Available: ${profiles.join(', ')}` : 'No profiles found.';
+    throw new Error(`[DEPLOY] Server profile "${profile}" not found. Expected: ${filePath}\n${hint}`);
+  }
+
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const cfg = JSON.parse(raw);
+
+  if (!cfg.guildId) {
+    throw new Error('[DEPLOY] guildId is required in server config (src/config/servers/<name>.json)');
+  }
+
+  return cfg;
+}
+
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+
+// secrets は env 必須（ここはconfigへ移さない）
+if (!TOKEN) {
+  console.error('[DEPLOY] Missing required env: DISCORD_TOKEN');
+  process.exit(1);
+}
+if (!CLIENT_ID) {
+  console.error('[DEPLOY] Missing required env: CLIENT_ID');
+  process.exit(1);
+}
+
+// GUILD_ID は env からではなく server config から取る（envがあれば上書き可）
+const profile =
+  readArgValue('--server') ||
+  process.env.SERVER_CONFIG_NAME ||
+  process.env.SERVER_PROFILE ||
+  'main';
+
+let GUILD_ID;
+try {
+  const cfg = loadServerConfig(profile);
+  GUILD_ID = process.env.GUILD_ID || cfg.guildId;
+} catch (e) {
+  console.error(e);
+  process.exit(1);
+}
 
 const commands = [
   // --- シーズン記録系 ---
@@ -66,6 +136,12 @@ const commands = [
     .setName('moti_help')
     .setDescription('成績通知表システムの使い方を表示します。'),
 
+  // --- embed（誰でも利用可） ---
+  new SlashCommandBuilder()
+    .setName('embed')
+    .setDescription('Embedメッセージを作成します。')
+    .setDMPermission(false),
+
   // --- 月間モチベ調査（一般メンバー用） ---
   new SlashCommandBuilder()
     .setName('moti_month_input')
@@ -112,5 +188,6 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
     console.log('登録完了');
   } catch (e) {
     console.error(e);
+    process.exitCode = 1;
   }
 })();
