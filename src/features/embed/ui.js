@@ -109,18 +109,25 @@ function buildBuilderComponents(draft) {
 
   const colorSelect = new StringSelectMenuBuilder()
     .setCustomId('embed:color')
-    .setPlaceholder('色（カラー）を選択（指定なし可）')
-    .addOptions([
-      { label: '指定なし', value: 'none' },
-      ...COLOR_PRESETS.map((c) => ({ label: c.label, value: c.value })),
-    ]);
+    .setPlaceholder('色（カラー）を選択（指定なし可）');
 
-  // 現在値がプリセットに一致していれば選択状態にする
+  // discord.js v14 の StringSelectMenuBuilder には setDefaultValues が無い。
+  // 代わりに option の default: true で選択状態を表現する。
+  let defaultValue = null;
   if (typeof draft.color === 'number') {
     const hex = draft.color.toString(16).padStart(6, '0').toLowerCase();
     const match = COLOR_PRESETS.find((c) => c.value === hex);
-    if (match) colorSelect.setDefaultValues([match.value]);
+    if (match) defaultValue = match.value;
   }
+
+  colorSelect.setOptions([
+    { label: '指定なし', value: 'none' },
+    ...COLOR_PRESETS.map((c) => ({
+      label: c.label,
+      value: c.value,
+      default: defaultValue === c.value,
+    })),
+  ]);
 
   const row3 = new ActionRowBuilder().addComponents(colorSelect);
 
