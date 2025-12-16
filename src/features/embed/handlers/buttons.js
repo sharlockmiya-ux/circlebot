@@ -261,11 +261,31 @@ async function handleEmbedButtons(interaction, ctx) {
     }
     session.cooldownUntil = t + 5000; // 5秒クールダウン
 
-    // 送信先：実行したチャンネル（将来拡張前提）
-    const channel = interaction.channel;
+    // 送信先：指定があればそのチャンネル、なければ実行チャンネル
+    const targetChannelId = draft.targetChannelId || interaction.channelId || null;
+
+    let channel = null;
+    if (interaction.guild && targetChannelId) {
+      channel = interaction.guild.channels.cache.get(targetChannelId) || null;
+      if (!channel) {
+        channel = await interaction.guild.channels.fetch(targetChannelId).catch(() => null);
+      }
+    }
+    if (!channel) channel = interaction.channel;
+
     if (!channel || typeof channel.send !== 'function') {
       await interaction.editReply({
         content: '❌ 送信先チャンネルが取得できません。',
+        embeds: [],
+        components: [],
+      });
+      return;
+    }
+
+    // テキスト送信が可能なチャンネルか確認（権限不足や対象外でも落とさない）
+    if (typeof channel.isTextBased === 'function' && !channel.isTextBased()) {
+      await interaction.editReply({
+        content: '❌ このチャンネルには送信できません。',
         embeds: [],
         components: [],
       });

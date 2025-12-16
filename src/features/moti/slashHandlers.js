@@ -38,6 +38,7 @@ async function handleMotiSlash(interaction, ctx) {
     getMonthlyRecordsByUser,
     runMonthlyDmReminder,
     buildSeasonSummaryForUser,
+    buildLinkContestSeasonSummaryForUser,
   } = ctx;
 
      // 追加：どのスラッシュコマンドが呼ばれたかをログに出す
@@ -525,6 +526,100 @@ async function handleMotiSlash(interaction, ctx) {
           if (!summary) {
             await interaction.reply({
               content: 'まだ記録がありません。/moti_input で記録を追加してください。',
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle(summary.title + '（全期間）')
+            .setDescription(summary.description)
+            .setColor(0x6366f1);
+
+          // 文字数制限を考慮して分割
+          let current = '';
+          const fields = [];
+
+          for (const line of summary.lines) {
+            const block = (current ? '\n\n' : '') + line;
+            if ((current + block).length > 1024) {
+              fields.push(current);
+              current = line;
+            } else {
+              current += block;
+            }
+          }
+          if (current) fields.push(current);
+
+          fields.forEach((value, index) => {
+            embed.addFields({
+              name: index === 0 ? 'シーズン別サマリー' : '\u200b',
+              value,
+            });
+          });
+
+          await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // /moti_summary_link → 直近5シーズンのシーズン別まとめ（リンクコンテスト）
+        if (commandName === 'moti_summary_link') {
+          const user = interaction.user;
+          const summary = await buildLinkContestSeasonSummaryForUser(user.id, user.username, 5);
+
+          if (!summary) {
+            await interaction.reply({
+              content: 'まだ記録がありません。/moti_input_link で記録を追加してください。',
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle(summary.title + '（直近5シーズン）')
+            .setDescription(summary.description)
+            .setColor(0x22c55e);
+
+          // 1024文字制限を考慮して分割
+          let current = '';
+          const fields = [];
+
+          for (const line of summary.lines.slice(-5)) {
+            const block = (current ? '\n\n' : '') + line;
+            if ((current + block).length > 1024) {
+              fields.push(current);
+              current = line;
+            } else {
+              current += block;
+            }
+          }
+          if (current) fields.push(current);
+
+          fields.forEach((value, index) => {
+            embed.addFields({
+              name: index === 0 ? 'シーズン別サマリー' : '\u200b',
+              value,
+            });
+          });
+
+          await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        // /moti_summary_link_all → 全シーズンのシーズン別まとめ（リンクコンテスト）
+        if (commandName === 'moti_summary_link_all') {
+          const user = interaction.user;
+          const summary = await buildLinkContestSeasonSummaryForUser(user.id, user.username, null);
+
+          if (!summary) {
+            await interaction.reply({
+              content: 'まだ記録がありません。/moti_input_link で記録を追加してください。',
               flags: MessageFlags.Ephemeral,
             });
             return;

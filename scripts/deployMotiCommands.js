@@ -130,6 +130,14 @@ const commands = [
     .setDescription('全シーズン分のシーズン別成績まとめを表示します。'),
 
   new SlashCommandBuilder()
+    .setName('moti_summary_link')
+    .setDescription('リンクコンテストの直近のシーズン別サマリーを表示します。'),
+
+  new SlashCommandBuilder()
+    .setName('moti_summary_link_all')
+    .setDescription('リンクコンテストの全シーズン分のシーズン別成績まとめを表示します。'),
+
+  new SlashCommandBuilder()
     .setName('moti_report')
     .setDescription('指定シーズンの成績推移レポートを表示します（運営専用）。')
     .addStringOption(opt =>
@@ -140,7 +148,19 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
 
+  
   new SlashCommandBuilder()
+    .setName('moti_report_link')
+    .setDescription('指定シーズンのリンクコンテスト成績推移レポートを表示します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
+        .setRequired(false),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+
+new SlashCommandBuilder()
     .setName('moti_notion')
     .setDescription('Notion用のサマリー表を出力します（運営専用）。')
     .addStringOption(opt =>
@@ -151,7 +171,19 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
 
+  
   new SlashCommandBuilder()
+    .setName('moti_notion_link')
+    .setDescription('リンクコンテストのNotion用サマリー表を出力します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
+        .setRequired(false),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+
+new SlashCommandBuilder()
     .setName('moti_help')
     .setDescription('成績通知表システムの使い方を表示します。'),
 
@@ -182,6 +214,18 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
 
+  new SlashCommandBuilder()
+    .setName('moti_month_remind')
+    .setDescription('指定月の月間モチベ未入力者にDMを送信します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('month')
+        .setDescription('対象月（例: 2025-11）※省略時は今月')
+        .setRequired(false),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+
+
   // --- シーズン終了報告（運営専用） ---
   new SlashCommandBuilder()
     .setName('moti_season_close')
@@ -193,6 +237,18 @@ const commands = [
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
+
+  new SlashCommandBuilder()
+    .setName('moti_season_close_link')
+    .setDescription('リンクコンテストのシーズン終了時に、成績一覧を通知チャンネルへ投稿します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）')
+        .setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);

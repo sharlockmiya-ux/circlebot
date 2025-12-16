@@ -32,6 +32,11 @@ async function tryHandleMotiAdminSlash(interaction, ctx, opts = {}) {
     return true;
   }
 
+  if (commandName === 'moti_report_link') {
+    await handleMotiReportLink(interaction, ctx, opts);
+    return true;
+  }
+
   if (commandName === 'moti_month_remind') {
     await handleMotiMonthRemind(interaction, ctx);
     return true;
@@ -39,6 +44,11 @@ async function tryHandleMotiAdminSlash(interaction, ctx, opts = {}) {
 
   if (commandName === 'moti_notion') {
     await handleMotiNotion(interaction, ctx, opts);
+    return true;
+  }
+
+  if (commandName === 'moti_notion_link') {
+    await handleMotiNotionLink(interaction, ctx, opts);
     return true;
   }
 
@@ -170,14 +180,14 @@ async function handleMotiSeasonCloseLink(interaction, ctx) {
                 '以下の要領で、今期の最終成績のご入力をお願いいたします。',
                 '',
                 '【入力方法】',
-                '/moti_input',
+                '/moti_input_link',
                 '・season: 該当シーズン（例: S35）',
                 '・現在の順位（終了時点の順位）',
                 '・現在の育成数（終了時点の累計）',
                 '',
                 '【任意の振り返り】',
-                '/moti_me … ご自身の成績推移の確認',
-                '/moti_summary / /moti_summary_all … シーズンごとのサマリー確認',
+                '/moti_me_link … ご自身の成績推移の確認',
+                '/moti_summary_link / /moti_summary_link_all … シーズンごとのサマリー確認',
               ].join('\n'))
               .setFooter({
                 text: '※入力いただいた成績は、今後のレポートおよび運営判断の参考とさせていただきます。',
@@ -423,6 +433,259 @@ async function handleMotiReport(interaction, ctx, opts) {
         }
 
 
+}
+
+
+async function handleMotiReportLink(interaction, ctx, opts) {
+  const { getAllLinkContestRecords } = ctx;
+  const { season, seasonLabel } = opts;
+  const { commandName } = interaction;
+
+  // ---------- /moti_report_link → 全員分（運営専用 / リンクコンテスト） ----------
+  if (commandName !== 'moti_report_link') return;
+
+  const member = interaction.member;
+  if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({
+      content: 'このコマンドは運営のみ実行できます。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  let records = [];
+  try {
+    records = await getAllLinkContestRecords(season);
+  } catch (e) {
+    console.error('moti_report_link getAllLinkContestRecords error:', e);
+    await interaction.editReply({
+      content: 'シートからの取得中にエラーが発生しました。時間をおいて再度お試しください。',
+    });
+    return;
+  }
+
+  if (!records.length) {
+    await interaction.editReply({
+      content: `${seasonLabel} の記録がまだありません。`,
+    });
+    return;
+  }
+
+  const byUser = new Map();
+  for (const r of records) {
+    if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+    byUser.get(r.userId).push(r);
+  }
+
+  const latestDeltas = [];
+  for (const recs of byUser.values()) {
+    recs.sort((a, b) => a.timestamp - b.timestamp);
+    if (recs.length >= 2) {
+      const last = recs[recs.length - 1];
+      const prev = recs[recs.length - 2];
+      latestDeltas.push(last.grow - prev.grow);
+    }
+  }
+
+  const avgDelta = latestDeltas.length
+    ? latestDeltas.reduce((a, b) => a + b, 0) / latestDeltas.length
+    : 0;
+
+  // embed を 25fields ごとに分割（Discord 制限対策）
+  const entries = [...byUser.entries()];
+  const pages = [];
+  for (let i = 0; i < entries.length; i += 25) {
+    pages.push(entries.slice(i, i + 25));
+  }
+
+  const embeds = pages.map((chunk, pageIndex) => {
+    const pageSuffix = pages.length > 1 ? ` (${pageIndex + 1}/${pages.length})` : '';
+    const embed = new EmbedBuilder()
+      .setTitle(`今週のリンクコンテスト成績推移レポート（${seasonLabel}）${pageSuffix}`)
+      .setDescription('各メンバーの順位・育成数の直近推移と平均との差をまとめています。');
+
+    for (const [userId, recs] of chunk) {
+      recs.sort((a, b) => a.timestamp - b.timestamp);
+      const latest = recs.slice(-10);
+
+      const username = latest[latest.length - 1].username ?? 'Unknown';
+
+      const ranks = latest.map(r => r.rank);
+      const grows = latest.map(r => r.grow);
+
+      const lastRank = ranks[ranks.length - 1];
+      const prevRank = ranks[ranks.length - 2] ?? lastRank;
+
+      const lastGrow = grows[grows.length - 1];
+      const prevGrow = grows[grows.length - 2] ?? lastGrow;
+
+      const rankDiff = lastRank - prevRank;
+      const growDiff = lastGrow - prevGrow;
+      const diffFromAvg = growDiff - avgDelta;
+
+      const growMark =
+        diffFromAvg > 0 ? '🔺' :
+        diffFromAvg < 0 ? '🔻' :
+        '➖';
+
+      const rankText = ranks.join(' → ');
+      const growText = `${prevGrow} → ${lastGrow}`;
+
+      embed.addFields({
+        name: `🔗 ${username}`,
+        value:
+          `順位: ${rankText}\n` +
+          `　┗ 直近変化: ${rankDiff >= 0 ? '+' : ''}${rankDiff}\n\n` +
+          `育成数: ${growText}\n` +
+          `　┗ 直近増加: +${growDiff}（平均 ${avgDelta.toFixed(1)}）${growMark}`,
+        inline: false,
+      });
+    }
+
+    return embed;
+  });
+
+  // 1メッセージあたり embeds は最大10
+  const firstBatch = embeds.slice(0, 10);
+  const rest = embeds.slice(10);
+
+  await interaction.editReply({ embeds: firstBatch });
+
+  for (let i = 0; i < rest.length; i += 10) {
+    const batch = rest.slice(i, i + 10);
+    try {
+      await interaction.followUp({ embeds: batch, flags: MessageFlags.Ephemeral });
+    } catch (e) {
+      console.error('moti_report_link followUp error:', e);
+      // 追送に失敗してもクラッシュしない
+      break;
+    }
+  }
+}
+
+async function handleMotiNotionLink(interaction, ctx, opts) {
+  const { getAllLinkContestRecords } = ctx;
+  const { season, seasonLabel } = opts;
+  const { commandName } = interaction;
+
+  // ---------- /moti_notion_link → Notion用表（運営専用 / リンクコンテスト） ----------
+  if (commandName !== 'moti_notion_link') return;
+
+  const member = interaction.member;
+  if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({
+      content: 'このコマンドは運営のみ実行できます。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  let records = [];
+  try {
+    records = await getAllLinkContestRecords(season);
+  } catch (e) {
+    console.error('moti_notion_link getAllLinkContestRecords error:', e);
+    await interaction.editReply({
+      content: 'シートからの取得中にエラーが発生しました。時間をおいて再度お試しください。',
+    });
+    return;
+  }
+
+  if (!records.length) {
+    await interaction.editReply({
+      content: `${seasonLabel} の記録がまだありません。`,
+    });
+    return;
+  }
+
+  const byUser = new Map();
+  for (const r of records) {
+    if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+    byUser.get(r.userId).push(r);
+  }
+
+  const latestDeltas = [];
+  for (const recs of byUser.values()) {
+    recs.sort((a, b) => a.timestamp - b.timestamp);
+    if (recs.length >= 2) {
+      const last = recs[recs.length - 1];
+      const prev = recs[recs.length - 2];
+      latestDeltas.push(last.grow - prev.grow);
+    }
+  }
+
+  const avgDelta = latestDeltas.length
+    ? latestDeltas.reduce((a, b) => a + b, 0) / latestDeltas.length
+    : 0;
+
+  const lines = [];
+  lines.push('| メンバー | 順位推移 | 最終順位 | 直近順位変化 | 育成数推移 | 直近増加数 | 増加数平均との差 |');
+  lines.push('|---------|----------|----------|--------------|------------|------------|-----------------|');
+
+  for (const [userId, recs] of byUser.entries()) {
+    recs.sort((a, b) => a.timestamp - b.timestamp);
+    const latest = recs.slice(-10);
+
+    const username = latest[latest.length - 1].username ?? 'Unknown';
+
+    const ranks = latest.map(r => r.rank);
+    const grows = latest.map(r => r.grow);
+
+    const lastRank = ranks[ranks.length - 1];
+    const prevRank = ranks[ranks.length - 2] ?? lastRank;
+
+    const lastGrow = grows[grows.length - 1];
+    const prevGrow = grows[grows.length - 2] ?? lastGrow;
+
+    const rankDiff = lastRank - prevRank;
+    const growDiff = lastGrow - prevGrow;
+    const diffFromAvg = growDiff - avgDelta;
+
+    const rankText = ranks.join(' → ');
+    const growText = `${prevGrow} → ${lastGrow}`;
+
+    lines.push(
+      `| ${username} | ${rankText} | ${lastRank}位 | ${rankDiff >= 0 ? '+' : ''}${rankDiff} | ${growText} | +${growDiff} | ${diffFromAvg >= 0 ? '+' : ''}${diffFromAvg.toFixed(1)} |`
+    );
+  }
+
+  // Discord 2000文字制限対策：行単位で分割（``` を含めて 1900 目安）
+  const chunks = [];
+  let current = '';
+  const wrap = (s) => '```markdown\n' + s + '\n```';
+
+  for (const line of lines) {
+    const next = current ? (current + '\n' + line) : line;
+    if (wrap(next).length > 1900) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = next;
+    }
+  }
+  if (current) chunks.push(current);
+
+  // 1通目
+  await interaction.editReply({
+    content: wrap(chunks[0]),
+  });
+
+  // 2通目以降
+  for (let i = 1; i < chunks.length; i++) {
+    try {
+      await interaction.followUp({
+        content: wrap(chunks[i]),
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (e) {
+      console.error('moti_notion_link followUp error:', e);
+      break;
+    }
+  }
 }
 
 async function handleMotiMonthRemind(interaction, ctx) {

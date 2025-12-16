@@ -27,12 +27,15 @@ function cleanIfNeeded() {
   }
 }
 
-function createDefaultDraft() {
+function createDefaultDraft({ targetChannelId = null } = {}) {
   return {
     title: '',
     description: '',
     color: null, // number|null
     timestamp: false,
+
+    // /embed の送信先（未指定時は実行チャンネル）
+    targetChannelId: targetChannelId || null,
 
     authorName: '',
     authorIconUrl: '',
@@ -77,7 +80,7 @@ function getOrCreateSession(guildId, channelId, userId, ttlMs = DEFAULT_TTL_MS) 
     updatedAt: t,
     ttlMs,
     cooldownUntil: 0,
-    draft: createDefaultDraft(),
+    draft: createDefaultDraft({ targetChannelId: channelId || null }),
   };
 
   sessions.set(k, s);
@@ -92,7 +95,8 @@ function updateDraft(session, patch) {
 
 function resetDraft(session) {
   if (!session) return;
-  session.draft = createDefaultDraft();
+  const keepTarget = session.draft?.targetChannelId || null;
+  session.draft = createDefaultDraft({ targetChannelId: keepTarget });
   session.updatedAt = now();
 }
 

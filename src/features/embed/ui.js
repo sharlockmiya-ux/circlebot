@@ -4,6 +4,8 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  ChannelSelectMenuBuilder,
+  ChannelType,
 } = require('discord.js');
 
 const COLOR_PRESETS = [
@@ -107,6 +109,24 @@ function buildBuilderComponents(draft) {
     new ButtonBuilder().setCustomId('embed:cancel').setLabel('キャンセル').setStyle(ButtonStyle.Secondary),
   );
 
+  // 送信先チャンネル（同じパネルで別chへ送れる）
+  const channelSelect = new ChannelSelectMenuBuilder()
+    .setCustomId('embed:target_channel')
+    .setPlaceholder('送信先チャンネル（未指定=現在のチャンネル）')
+    .setMinValues(1)
+    .setMaxValues(1)
+    .setChannelTypes([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
+
+  if (draft?.targetChannelId) {
+    try {
+      channelSelect.setDefaultChannels(draft.targetChannelId);
+    } catch (_) {
+      // default 設定に失敗しても落とさない
+    }
+  }
+
+  const row3 = new ActionRowBuilder().addComponents(channelSelect);
+
   const colorSelect = new StringSelectMenuBuilder()
     .setCustomId('embed:color')
     .setPlaceholder('色（カラー）を選択（指定なし可）');
@@ -129,9 +149,9 @@ function buildBuilderComponents(draft) {
     })),
   ]);
 
-  const row3 = new ActionRowBuilder().addComponents(colorSelect);
+  const row4 = new ActionRowBuilder().addComponents(colorSelect);
 
-  return [row1, row2, row3];
+  return [row1, row2, row3, row4];
 }
 
 function presetColorToInt(value) {

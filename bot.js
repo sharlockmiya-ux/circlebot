@@ -228,6 +228,151 @@ async function buildSeasonSummaryForUser(userId, username, limitSeasons) {
 }
 
 
+// ===== 成績通知表: リンクコンテスト シーズン別サマリー共通処理 =====
+async function buildLinkContestSeasonSummaryForUser(userId, username, limitSeasons) {
+  let allRecords = [];
+  try {
+    // getAllLinkContestRecords が season 省略時に全件返す前提
+    allRecords = await getAllLinkContestRecords();
+  } catch (e) {
+    console.error('buildLinkContestSeasonSummaryForUser error:', e);
+    return null;
+  }
+
+  if (!allRecords || !allRecords.length) {
+    return null;
+  }
+
+  // season -> Map<userId, { timestamp, rank, grow, username }>
+  const seasonUserMap = new Map();
+
+  for (const r of allRecords) {
+    const seasonKey = r.season || 'UNKNOWN';
+
+    if (!seasonUserMap.has(seasonKey)) {
+      seasonUserMap.set(seasonKey, new Map());
+    }
+    const userMap = seasonUserMap.get(seasonKey);
+
+    const prev = userMap.get(r.userId);
+    // 同じシーズン・同じユーザーでは「一番新しい記録」を採用
+    if (!prev || r.timestamp > prev.timestamp) {
+      userMap.set(r.userId, {
+        timestamp: r.timestamp,
+        rank: r.rank,
+        grow: r.grow,
+        username: r.username,
+      });
+    }
+  }
+
+  // シーズンを番号順にソート（"S35" などを想定）
+  const sortSeasonKeys = (keys) => {
+    return [...keys].sort((a, b) => {
+      const na = parseInt(String(a).replace(/^\D+/, ''), 10);
+      const nb = parseInt(String(b).replace(/^\D+/, ''), 10);
+
+      if (Number.isNaN(na) || Number.isNaN(nb)) {
+        return String(a).localeCompare(String(b));
+      }
+      return na - nb;
+    });
+  };
+
+  const allSeasonKeysSorted = sortSeasonKeys(seasonUserMap.keys());
+
+  // このユーザーが記録を持っているシーズンだけを抽出
+  const userSeasonKeys = allSeasonKeysSorted.filter(
+    (s) => seasonUserMap.get(s).has(userId),
+  );
+
+  if (!userSeasonKeys.length) {
+    return null;
+  }
+
+  // 直近 limitSeasons 件だけ
+  const targetSeasonKeys = limitSeasons
+    ? userSeasonKeys.slice(-limitSeasons)
+    : userSeasonKeys;
+
+  // シーズンごとの「サークル平均 今季育成数」を計算
+  const prevGrowByUser = new Map();
+  const circleAvgGrowBySeason = new Map();
+
+  for (const s of allSeasonKeysSorted) {
+    const usersInSeason = seasonUserMap.get(s);
+    const diffs = [];
+
+    for (const [uId, rec] of usersInSeason.entries()) {
+      const prevGrow = prevGrowByUser.get(uId);
+      const growDiff =
+        prevGrow == null ? rec.grow : rec.grow - prevGrow;
+
+      diffs.push(growDiff);
+      prevGrowByUser.set(uId, rec.grow);
+    }
+
+    const avgGrow =
+      diffs.length > 0
+        ? diffs.reduce((a, b) => a + b, 0) / diffs.length
+        : 0;
+
+    circleAvgGrowBySeason.set(s, avgGrow);
+  }
+
+  // 対象ユーザーのシーズンごとサマリーを作成
+  const lines = [];
+  let prevRankUser = null;
+  let prevGrowUser = null;
+
+  for (const s of targetSeasonKeys) {
+    const rec = seasonUserMap.get(s).get(userId);
+    if (!rec) continue;
+
+    const lastRank = rec.rank;
+    const lastGrow = rec.grow;
+
+    const seasonGrow =
+      prevGrowUser == null ? lastGrow : lastGrow - prevGrowUser;
+    const seasonRankDiff =
+      prevRankUser == null ? 0 : lastRank - prevRankUser;
+
+    const avgGrow = circleAvgGrowBySeason.get(s) ?? 0;
+    const diffFromAvg = seasonGrow - avgGrow;
+
+    const mark =
+      diffFromAvg > 0 ? '🟢' :
+      diffFromAvg < 0 ? '🔻' :
+      '➖';
+
+    const rankDiffText =
+      prevRankUser == null
+        ? '（初期値）'
+        : `（前シーズン比 ${seasonRankDiff >= 0 ? '+' : ''}${seasonRankDiff}）`;
+
+    lines.push(
+      `**${s}**\n` +
+      `最終順位: ${lastRank}位 ${rankDiffText}\n` +
+      `最終育成数: ${lastGrow}（今季 +${seasonGrow}）\n` +
+      `　┗ 今季育成数: +${seasonGrow}（サークル平均 +${avgGrow.toFixed(1)}）${mark}`,
+    );
+
+    prevRankUser = lastRank;
+    prevGrowUser = lastGrow;
+  }
+
+  if (!lines.length) {
+    return null;
+  }
+
+  return {
+    title: `📘 リンクコンテスト シーズン別まとめ - ${username}`,
+    description:
+      '各シーズンの最終順位と「今季育成数（前シーズン末からの増加）」を表示します。',
+    lines,
+  };
+}
+
 // ※ cleanupOldVcLogs は src/features/vc/vcMonitor に移動
 
 if (!TOKEN || !CHANNEL_ID) {
@@ -485,6 +630,7 @@ registerInteractionCreate(client, {
   getMonthlyRecordsByUser,
   runMonthlyDmReminder,
   buildSeasonSummaryForUser,
+  buildLinkContestSeasonSummaryForUser,
 });
 
 

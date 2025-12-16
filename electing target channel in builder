@@ -1,0 +1,185 @@
+[1mdiff --git a/bot.js b/bot.js[m
+[1mindex a40f352..a4910ca 100644[m
+[1m--- a/bot.js[m
+[1m+++ b/bot.js[m
+[36m@@ -228,6 +228,151 @@[m [masync function buildSeasonSummaryForUser(userId, username, limitSeasons) {[m
+ }[m
+ [m
+ [m
+[32m+[m[32m// ===== 成績通知表: リンクコンテスト シーズン別サマリー共通処理 =====[m
+[32m+[m[32masync function buildLinkContestSeasonSummaryForUser(userId, username, limitSeasons) {[m
+[32m+[m[32m  let allRecords = [];[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    // getAllLinkContestRecords が season 省略時に全件返す前提[m
+[32m+[m[32m    allRecords = await getAllLinkContestRecords();[m
+[32m+[m[32m  } catch (e) {[m
+[32m+[m[32m    console.error('buildLinkContestSeasonSummaryForUser error:', e);[m
+[32m+[m[32m    return null;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (!allRecords || !allRecords.length) {[m
+[32m+[m[32m    return null;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // season -> Map<userId, { timestamp, rank, grow, username }>[m
+[32m+[m[32m  const seasonUserMap = new Map();[m
+[32m+[m
+[32m+[m[32m  for (const r of allRecords) {[m
+[32m+[m[32m    const seasonKey = r.season || 'UNKNOWN';[m
+[32m+[m
+[32m+[m[32m    if (!seasonUserMap.has(seasonKey)) {[m
+[32m+[m[32m      seasonUserMap.set(seasonKey, new Map());[m
+[32m+[m[32m    }[m
+[32m+[m[32m    const userMap = seasonUserMap.get(seasonKey);[m
+[32m+[m
+[32m+[m[32m    const prev = userMap.get(r.userId);[m
+[32m+[m[32m    // 同じシーズン・同じユーザーでは「一番新しい記録」を採用[m
+[32m+[m[32m    if (!prev || r.timestamp > prev.timestamp) {[m
+[32m+[m[32m      userMap.set(r.userId, {[m
+[32m+[m[32m        timestamp: r.timestamp,[m
+[32m+[m[32m        rank: r.rank,[m
+[32m+[m[32m        grow: r.grow,[m
+[32m+[m[32m        username: r.username,[m
+[32m+[m[32m      });[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // シーズンを番号順にソート（"S35" などを想定）[m
+[32m+[m[32m  const sortSeasonKeys = (keys) => {[m
+[32m+[m[32m    return [...keys].sort((a, b) => {[m
+[32m+[m[32m      const na = parseInt(String(a).replace(/^\D+/, ''), 10);[m
+[32m+[m[32m      const nb = parseInt(String(b).replace(/^\D+/, ''), 10);[m
+[32m+[m
+[32m+[m[32m      if (Number.isNaN(na) || Number.isNaN(nb)) {[m
+[32m+[m[32m        return String(a).localeCompare(String(b));[m
+[32m+[m[32m      }[m
+[32m+[m[32m      return na - nb;[m
+[32m+[m[32m    });[m
+[32m+[m[32m  };[m
+[32m+[m
+[32m+[m[32m  const allSeasonKeysSorted = sortSeasonKeys(seasonUserMap.keys());[m
+[32m+[m
+[32m+[m[32m  // このユーザーが記録を持っているシーズンだけを抽出[m
+[32m+[m[32m  const userSeasonKeys = allSeasonKeysSorted.filter([m
+[32m+[m[32m    (s) => seasonUserMap.get(s).has(userId),[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  if (!userSeasonKeys.length) {[m
+[32m+[m[32m    return null;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // 直近 limitSeasons 件だけ[m
+[32m+[m[32m  const targetSeasonKeys = limitSeasons[m
+[32m+[m[32m    ? userSeasonKeys.slice(-limitSeasons)[m
+[32m+[m[32m    : userSeasonKeys;[m
+[32m+[m
+[32m+[m[32m  // シーズンごとの「サークル平均 今季育成数」を計算[m
+[32m+[m[32m  const prevGrowByUser = new Map();[m
+[32m+[m[32m  const circleAvgGrowBySeason = new Map();[m
+[32m+[m
+[32m+[m[32m  for (const s of allSeasonKeysSorted) {[m
+[32m+[m[32m    const usersInSeason = seasonUserMap.get(s);[m
+[32m+[m[32m    const diffs = [];[m
+[32m+[m
+[32m+[m[32m    for (const [uId, rec] of usersInSeason.entries()) {[m
+[32m+[m[32m      const prevGrow = prevGrowByUser.get(uId);[m
+[32m+[m[32m      const growDiff =[m
+[32m+[m[32m        prevGrow == null ? rec.grow : rec.grow - prevGrow;[m
+[32m+[m
+[32m+[m[32m      diffs.push(growDiff);[m
+[32m+[m[32m      prevGrowByUser.set(uId, rec.grow);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    const avgGrow =[m
+[32m+[m[32m      diffs.length > 0[m
+[32m+[m[32m        ? diffs.reduce((a, b) => a + b, 0) / diffs.length[m
+[32m+[m[32m        : 0;[m
+[32m+[m
+[32m+[m[32m    circleAvgGrowBySeason.set(s, avgGrow);[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  // 対象ユーザーのシーズンごとサマリーを作成[m
+[32m+[m[32m  const lines = [];[m
+[32m+[m[32m  let prevRankUser = null;[m
+[32m+[m[32m  let prevGrowUser = null;[m
+[32m+[m
+[32m+[m[32m  for (const s of targetSeasonKeys) {[m
+[32m+[m[32m    const rec = seasonUserMap.get(s).get(userId);[m
+[32m+[m[32m    if (!rec) continue;[m
+[32m+[m
+[32m+[m[32m    const lastRank = rec.rank;[m
+[32m+[m[32m    const lastGrow = rec.grow;[m
+[32m+[m
+[32m+[m[32m    const seasonGrow =[m
+[32m+[m[32m      prevGrowUser == null ? lastGrow : lastGrow - prevGrowUser;[m
+[32m+[m[32m    const seasonRankDiff =[m
+[32m+[m[32m      prevRankUser == null ? 0 : lastRank - prevRankUser;[m
+[32m+[m
+[32m+[m[32m    const avgGrow = circleAvgGrowBySeason.get(s) ?? 0;[m
+[32m+[m[32m    const diffFromAvg = seasonGrow - avgGrow;[m
+[32m+[m
+[32m+[m[32m    const mark =[m
+[32m+[m[32m      diffFromAvg > 0 ? '🟢' :[m
+[32m+[m[32m      diffFromAvg < 0 ? '🔻' :[m
+[32m+[m[32m      '➖';[m
+[32m+[m
+[32m+[m[32m    const rankDiffText =[m
+[32m+[m[32m      prevRankUser == null[m
+[32m+[m[32m        ? '（初期値）'[m
+[32m+[m[32m        : `（前シーズン比 ${seasonRankDiff >= 0 ? '+' : ''}${seasonRankDiff}）`;[m
+[32m+[m
+[32m+[m[32m    lines.push([m
+[32m+[m[32m      `**${s}**\n` +[m
+[32m+[m[32m      `最終順位: ${lastRank}位 ${rankDiffText}\n` +[m
+[32m+[m[32m      `最終育成数: ${lastGrow}（今季 +${seasonGrow}）\n` +[m
+[32m+[m[32m      `　┗ 今季育成数: +${seasonGrow}（サークル平均 +${avgGrow.toFixed(1)}）${mark}`,[m
+[32m+[m[32m    );[m
+[32m+[m
+[32m+[m[32m    prevRankUser = lastRank;[m
+[32m+[m[32m    prevGrowUser = lastGrow;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  if (!lines.length) {[m
+[32m+[m[32m    return null;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return {[m
+[32m+[m[32m    title: `📘 リンクコンテスト シーズン別まとめ - ${username}`,[m
+[32m+[m[32m    description:[m
+[32m+[m[32m      '各シーズンの最終順位と「今季育成数（前シーズン末からの増加）」を表示します。',[m
+[32m+[m[32m    lines,[m
+[32m+[m[32m  };[m
+[32m+[m[32m}[m
+[32m+[m
+ // ※ cleanupOldVcLogs は src/features/vc/vcMonitor に移動[m
+ [m
+ if (!TOKEN || !CHANNEL_ID) {[m
+[36m@@ -485,6 +630,7 @@[m [mregisterInteractionCreate(client, {[m
+   getMonthlyRecordsByUser,[m
+   runMonthlyDmReminder,[m
+   buildSeasonSummaryForUser,[m
+[32m+[m[32m  buildLinkContestSeasonSummaryForUser,[m
+ });[m
+ [m
+ [m
+[1mdiff --git a/scripts/deployMotiCommands.js b/scripts/deployMotiCommands.js[m
+[1mindex d73968f..34f521f 100644[m
+[1m--- a/scripts/deployMotiCommands.js[m
+[1m+++ b/scripts/deployMotiCommands.js[m
+[36m@@ -129,6 +129,14 @@[m [mconst commands = [[m
+     .setName('moti_summary_all')[m
+     .setDescription('全シーズン分のシーズン別成績まとめを表示します。'),[m
+ [m
+[32m+[m[32m  new SlashCommandBuilder()[m
+[32m+[m[32m    .setName('moti_summary_link')[m
+[32m+[m[32m    .setDescription('リンクコンテストの直近のシーズン別サマリーを表示します。'),[m
+[32m+[m
+[32m+[m[32m  new SlashCommandBuilder()[m
+[32m+[m[32m    .setName('moti_summary_link_all')[m
+[32m+[m[32m    .setDescription('リンクコンテストの全シーズン分のシーズン別成績まとめを表示します。'),[m
+[32m+[m
+   new SlashCommandBuilder()[m
+     .setName('moti_report')[m
+     .setDescription('指定シーズンの成績推移レポートを表示します（運営専用）。')[m
+[36m@@ -140,7 +148,19 @@[m [mconst commands = [[m
+     .setDefaultMemberPermissions(PermissionF
