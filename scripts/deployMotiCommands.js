@@ -174,6 +174,19 @@ const commands = [
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
+
+
+  // --- シーズン終了報告（運営専用 / リンクコンテスト） ---
+  new SlashCommandBuilder()
+    .setName('moti_season_close_link')
+    .setDescription('シーズン終了時に、リンクコンテスト向けの案内テンプレートを通知チャンネルへ投稿します（運営専用）。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）')
+        .setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
