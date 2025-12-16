@@ -109,23 +109,21 @@ function buildBuilderComponents(draft) {
     new ButtonBuilder().setCustomId('embed:cancel').setLabel('キャンセル').setStyle(ButtonStyle.Secondary),
   );
 
-  // 送信先チャンネル（同じパネルで別chへ送れる）
-  const channelSelect = new ChannelSelectMenuBuilder()
-    .setCustomId('embed:target_channel')
-    .setPlaceholder('送信先チャンネル（未指定=現在のチャンネル）')
-    .setMinValues(1)
-    .setMaxValues(1)
-    .setChannelTypes([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 
-  if (draft?.targetChannelId) {
-    try {
-      channelSelect.setDefaultChannels(draft.targetChannelId);
-    } catch (_) {
-      // default 設定に失敗しても落とさない
-    }
+const targetChannelSelect = new ChannelSelectMenuBuilder()
+  .setCustomId('embed:target_channel')
+  .setPlaceholder('送信先チャンネルを選択（省略時はこのチャンネル）')
+  .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+if (draft.targetChannelId) {
+  try {
+    targetChannelSelect.setDefaultChannels([draft.targetChannelId]);
+  } catch (e) {
+    // 不正なID等が混ざっても落とさない
   }
+}
 
-  const row3 = new ActionRowBuilder().addComponents(channelSelect);
+const row3 = new ActionRowBuilder().addComponents(targetChannelSelect);
 
   const colorSelect = new StringSelectMenuBuilder()
     .setCustomId('embed:color')

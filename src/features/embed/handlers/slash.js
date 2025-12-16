@@ -13,6 +13,12 @@ async function handleEmbedSlash(interaction, ctx) {
   const session = getOrCreateSession(guildId, channelId, userId);
   const draft = session.draft;
 
+  // 送信先の初期値：/embed を実行したチャンネル
+  if (!draft.targetChannelId && channelId) {
+    draft.targetChannelId = channelId;
+  }
+
+
   const embed = buildPreviewEmbed(draft);
   const components = buildBuilderComponents(draft);
 

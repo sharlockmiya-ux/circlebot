@@ -26,7 +26,7 @@ async function handleEmbedSelects(interaction, ctx) {
   }
 
   // ===== ビルダーパネル：色選択 =====
-  if (interaction.isStringSelectMenu() && interaction.customId === 'embed:color') {
+  if (interaction.customId === 'embed:color') {
     const guildId = interaction.guildId || null;
     const channelId = interaction.channelId || null;
     const userId = interaction.user?.id;

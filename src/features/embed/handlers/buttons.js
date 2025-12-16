@@ -234,7 +234,10 @@ async function handleEmbedButtons(interaction, ctx) {
 
   if (interaction.customId === 'embed:clear') {
     await interaction.deferUpdate();
+    const keepTargetChannelId = session.draft?.targetChannelId || channelId;
     resetDraft(session);
+    // 送信先は維持（クリアで誤爆しないように）
+    session.draft.targetChannelId = keepTargetChannelId;
     await refreshPanel(interaction, session);
     return;
   }
@@ -260,17 +263,23 @@ async function handleEmbedButtons(interaction, ctx) {
       return;
     }
     session.cooldownUntil = t + 5000; // 5秒クールダウン
-
-    // 送信先：指定があればそのチャンネル、なければ実行チャンネル
-    const targetChannelId = draft.targetChannelId || interaction.channelId || null;
-
+    // 送信先：選択チャンネル（未指定なら実行ch）
     let channel = null;
-    if (interaction.guild && targetChannelId) {
-      channel = interaction.guild.channels.cache.get(targetChannelId) || null;
+
+    const wantedId = draft.targetChannelId || channelId;
+    if (wantedId && interaction.guild) {
+      // cache → fetch の順（失敗しても落とさない）
+      channel = interaction.guild.channels?.cache?.get?.(wantedId) || null;
       if (!channel) {
-        channel = await interaction.guild.channels.fetch(targetChannelId).catch(() => null);
+        try {
+          channel = await interaction.guild.channels.fetch(wantedId);
+        } catch (e) {
+          channel = null;
+        }
       }
     }
+
+    // fallback: 実行したチャンネル
     if (!channel) channel = interaction.channel;
 
     if (!channel || typeof channel.send !== 'function') {
@@ -282,10 +291,10 @@ async function handleEmbedButtons(interaction, ctx) {
       return;
     }
 
-    // テキスト送信が可能なチャンネルか確認（権限不足や対象外でも落とさない）
+    // テキスト投稿できないチャンネルは弾く（フォーラム等）
     if (typeof channel.isTextBased === 'function' && !channel.isTextBased()) {
       await interaction.editReply({
-        content: '❌ このチャンネルには送信できません。',
+        content: '❌ 選択した送信先には投稿できません（テキストチャンネルを選択してください）。',
         embeds: [],
         components: [],
       });
