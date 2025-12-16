@@ -12,6 +12,7 @@ async function handleMotiModalSubmit(interaction, ctx) {
   const {
     CURRENT_SEASON,
     appendRecord,
+    appendLinkContestRecord,
     appendMonthlyRecord,
     getMonthlyRecordsByUser,
   } = ctx;
@@ -81,6 +82,75 @@ async function handleMotiModalSubmit(interaction, ctx) {
             }
           } catch (e) {
             console.error('motiInputModal error reply failed:', e);
+          }
+          return;
+        }
+      }
+
+      // ===== モーダル送信（/moti_input_link のフォーム） =====
+      if (interaction.isModalSubmit() && interaction.customId === 'motiLinkInputModal') {
+        console.log(`[Modal] motiLinkInputModal submit from ${interaction.user.tag} (${interaction.user.id})`);
+
+        try {
+          // 3秒制限対策
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+          const rawSeason = interaction.fields.getTextInputValue('season').trim();
+          const rankText  = interaction.fields.getTextInputValue('rank').trim();
+          const growText  = interaction.fields.getTextInputValue('grow').trim();
+
+          const rank = parseInt(rankText, 10);
+          const grow = parseInt(growText, 10);
+
+          if (Number.isNaN(rank) || Number.isNaN(grow)) {
+            await interaction.editReply({
+              content: '順位と育成数は数字で入力してください。',
+            });
+            return;
+          }
+
+          const season = rawSeason || CURRENT_SEASON;
+          if (!season) {
+            await interaction.editReply({
+              content: 'シーズンが空欄です。コマンドの season またはフォームのいずれかに入力してください。',
+            });
+            return;
+          }
+
+          // スプレッドシートに記録（リンクコンテスト）
+          await appendLinkContestRecord(
+            interaction.user.id,
+            interaction.user.username || interaction.user.tag,
+            rank,
+            grow,
+            season,
+          );
+
+          await interaction.editReply({
+            content: [
+              '✅ 記録を保存しました。',
+              `シーズン: ${season}`,
+              `順位: ${rank}`,
+              `育成数: ${grow}`,
+            ].join('\n'),
+          });
+          return;
+        } catch (err) {
+          console.error('motiLinkInputModal submit error:', err);
+
+          try {
+            if (interaction.deferred || interaction.replied) {
+              await interaction.editReply({
+                content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+              });
+            } else {
+              await interaction.reply({
+                content: '記録の保存中にエラーが発生しました。時間をおいて再度お試しください。',
+                flags: MessageFlags.Ephemeral,
+              });
+            }
+          } catch (e) {
+            console.error('motiLinkInputModal error reply failed:', e);
           }
           return;
         }

@@ -93,9 +93,28 @@ const commands = [
         .setRequired(false),
     ),
 
+  // --- リンクコンテスト記録系 ---
+  new SlashCommandBuilder()
+    .setName('moti_input_link')
+    .setDescription('リンクコンテストの順位と育成数を記録します。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
+        .setRequired(false),
+    ),
+
   new SlashCommandBuilder()
     .setName('moti_me')
     .setDescription('自分の順位・育成数の推移を確認します。')
+    .addStringOption(opt =>
+      opt.setName('season')
+        .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
+        .setRequired(false),
+    ),
+
+  new SlashCommandBuilder()
+    .setName('moti_me_link')
+    .setDescription('自分のリンクコンテスト順位・育成数の推移を確認します。')
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）※省略時は現在シーズン')
@@ -167,19 +186,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('moti_season_close')
     .setDescription('シーズン終了時に、成績一覧を通知チャンネルへ投稿します（運営専用）。')
-    .addStringOption(opt =>
-      opt.setName('season')
-        .setDescription('対象シーズン（例: S35）')
-        .setRequired(true),
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .setDMPermission(false),
-
-
-  // --- シーズン終了報告（運営専用 / リンクコンテスト） ---
-  new SlashCommandBuilder()
-    .setName('moti_season_close_link')
-    .setDescription('シーズン終了時に、リンクコンテスト向けの案内テンプレートを通知チャンネルへ投稿します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
         .setDescription('対象シーズン（例: S35）')

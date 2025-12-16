@@ -28,8 +28,11 @@ async function handleMotiSlash(interaction, ctx) {
     CURRENT_SEASON,
     MOTI_NOTICE_CHANNEL_ID,
     appendRecord,
+    appendLinkContestRecord,
     getRecordsByUser,
+    getLinkContestRecordsByUser,
     getAllRecords,
+    getAllLinkContestRecords,
     appendMonthlyRecord,
     getAllMonthlyRecords,
     getMonthlyRecordsByUser,
@@ -114,6 +117,65 @@ async function handleMotiSlash(interaction, ctx) {
     return;
   }
 
+
+       if (commandName === 'moti_input_link') {
+    const modal = new ModalBuilder()
+      .setCustomId('motiLinkInputModal')
+      .setTitle('リンクコンテスト記録入力');
+
+    // シーズン入力欄
+    const seasonInput = new TextInputBuilder()
+      .setCustomId('season')
+      .setLabel('対象シーズン（例: S35）※空欄なら現在シーズン')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder('S35');
+
+    // 順位
+    const rankInput = new TextInputBuilder()
+      .setCustomId('rank')
+      .setLabel('現在の順位（数字のみ）')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder('例: 3');
+
+    // 育成数
+    const growInput = new TextInputBuilder()
+      .setCustomId('grow')
+      .setLabel('現在の育成数（数字のみ）')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder('例: 120');
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(seasonInput),
+      new ActionRowBuilder().addComponents(rankInput),
+      new ActionRowBuilder().addComponents(growInput),
+    );
+
+    try {
+      await interaction.showModal(modal);
+    } catch (err) {
+      console.error('moti_input_link showModal error:', err);
+
+      // すでにどこかで応答済み（40060/10062）の場合は無視して終了
+      if (err.code === 40060 || err.code === 10062) {
+        return;
+      }
+
+      if (!interaction.replied && !interaction.deferred) {
+        try {
+          await interaction.reply({
+            content: 'リンクコンテスト記録入力モーダルの表示中にエラーが発生しました。時間をおいて再度お試しください。',
+            flags: MessageFlags.Ephemeral,
+          });
+        } catch (e) {
+          console.error('moti_input_link error reply failed:', e);
+        }
+      }
+    }
+    return;
+  }
 
               // ---------- /moti_month_input → 月間モチベ入力モーダル ----------
         if (commandName === 'moti_month_input') {
@@ -255,6 +317,88 @@ async function handleMotiSlash(interaction, ctx) {
           return;
         }
 
+
+                  // /moti_me_link → 自分の推移（リンクコンテスト）
+        if (commandName === 'moti_me_link') {
+          const userId = interaction.user.id;
+          const myRecords = await getLinkContestRecordsByUser(userId, season);
+
+          if (!myRecords.length) {
+            await interaction.reply({
+              content: `${seasonLabel} の記録がまだありません。/moti_input_link で記録を追加してください。`,
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+
+          myRecords.sort((a, b) => a.timestamp - b.timestamp);
+          const latest = myRecords.slice(-10);
+          const rankHistory = latest.map((r) => r.rank);
+          const growHistory = latest.map((r) => r.grow);
+
+          const lastRank = rankHistory[rankHistory.length - 1];
+          const prevRank = rankHistory[rankHistory.length - 2] ?? lastRank;
+
+          const lastGrow = growHistory[growHistory.length - 1];
+          const prevGrow = growHistory[growHistory.length - 2] ?? lastGrow;
+
+          const rankDiff = lastRank - prevRank;
+          const growDiff = lastGrow - prevGrow;
+
+          // サークル平均（同シーズン・直近2回分の増加量）
+          const allRecords = await getAllLinkContestRecords(season);
+          const byUser = new Map();
+          for (const r of allRecords) {
+            if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+            byUser.get(r.userId).push(r);
+          }
+
+          const latestDeltas = [];
+          for (const recs of byUser.values()) {
+            recs.sort((a, b) => a.timestamp - b.timestamp);
+            if (recs.length >= 2) {
+              const last = recs[recs.length - 1];
+              const prev = recs[recs.length - 2];
+              latestDeltas.push(last.grow - prev.grow);
+            }
+          }
+
+          const avgDelta = latestDeltas.length
+            ? latestDeltas.reduce((a, b) => a + b, 0) / latestDeltas.length
+            : 0;
+
+          const diffFromAvg = growDiff - avgDelta;
+
+          const growMark =
+            diffFromAvg > 0 ? '🟢' :
+            diffFromAvg < 0 ? '🔻' :
+            '➖';
+
+          const embed = new EmbedBuilder()
+            .setTitle(`🔗 ${seasonLabel} の ${interaction.user.username} さんのリンクコンテスト推移`)
+            .setDescription('最新10回分の記録です。')
+            .setColor(0xff4d4d)
+            .addFields(
+              {
+                name: '順位推移',
+                value:
+                  `${rankHistory.join(' → ')}\n` +
+                  `直近変化: ${rankDiff >= 0 ? '+' : ''}${rankDiff}`,
+              },
+              {
+                name: '育成数推移',
+                value:
+                  `${prevGrow} → ${lastGrow}\n` +
+                  `直近増加: +${growDiff}（サークル平均 +${avgDelta.toFixed(1)}）${growMark}`,
+              },
+            );
+
+          await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
               // ---------- /moti_month_me → 月間モチベ推移 ----------
         if (commandName === 'moti_month_me') {
           const user = interaction.user;

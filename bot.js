@@ -44,6 +44,12 @@ const {
 } = require('./data/motiSheetStore');
 
 const {
+  appendLinkContestRecord,
+  getLinkContestRecordsByUser,
+  getAllLinkContestRecords,
+} = require('./data/motiLinkContestSheetStore');
+
+const {
   appendMonthlyRecord,
   getAllMonthlyRecords,
   getMonthlyRecordsByUser,
@@ -471,6 +477,9 @@ registerInteractionCreate(client, {
   appendRecord,
   getRecordsByUser,
   getAllRecords,
+  appendLinkContestRecord,
+  getLinkContestRecordsByUser,
+  getAllLinkContestRecords,
   appendMonthlyRecord,
   getAllMonthlyRecords,
   getMonthlyRecordsByUser,
