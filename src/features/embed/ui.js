@@ -8,6 +8,8 @@ const {
   ChannelType,
 } = require('discord.js');
 
+const { EMBED_TEMPLATES } = require('./templates');
+
 const COLOR_PRESETS = [
   { label: '🟥 Red (#e74c3c)', value: 'e74c3c', color: 0xe74c3c },
   { label: '🟧 Orange (#e67e22)', value: 'e67e22', color: 0xe67e22 },
@@ -110,6 +112,26 @@ function buildBuilderComponents(draft) {
   );
 
 
+  // ===== テンプレ選択（任意） =====
+  const templateSelect = new StringSelectMenuBuilder()
+    .setCustomId('embed:template')
+    .setPlaceholder('テンプレを選択（任意）');
+
+  const defaultTemplate = draft.templateId || null;
+  templateSelect.setOptions([
+    { label: '指定なし', value: 'none', default: !defaultTemplate },
+    ...EMBED_TEMPLATES.map((t) => ({
+      label: t.label,
+      value: t.id,
+      description: t.description || undefined,
+      default: defaultTemplate === t.id,
+    })),
+  ]);
+
+  const row3 = new ActionRowBuilder().addComponents(templateSelect);
+
+
+  // ===== 送信先チャンネル選択 =====
 const targetChannelSelect = new ChannelSelectMenuBuilder()
   .setCustomId('embed:target_channel')
   .setPlaceholder('送信先チャンネルを選択（省略時はこのチャンネル）')
@@ -123,7 +145,7 @@ if (draft.targetChannelId) {
   }
 }
 
-const row3 = new ActionRowBuilder().addComponents(targetChannelSelect);
+const row4 = new ActionRowBuilder().addComponents(targetChannelSelect);
 
   const colorSelect = new StringSelectMenuBuilder()
     .setCustomId('embed:color')
@@ -147,9 +169,10 @@ const row3 = new ActionRowBuilder().addComponents(targetChannelSelect);
     })),
   ]);
 
-  const row4 = new ActionRowBuilder().addComponents(colorSelect);
+  const row5 = new ActionRowBuilder().addComponents(colorSelect);
 
-  return [row1, row2, row3, row4];
+  // Discordの行数上限は5
+  return [row1, row2, row3, row4, row5];
 }
 
 function presetColorToInt(value) {

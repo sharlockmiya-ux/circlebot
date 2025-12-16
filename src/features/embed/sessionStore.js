@@ -37,6 +37,9 @@ function createDefaultDraft() {
     // 送信先チャンネル（未指定なら /embed 実行ch）
     targetChannelId: null,
 
+    // 選択中テンプレ（UIのデフォルト選択表示用）
+    templateId: null,
+
     authorName: '',
     authorIconUrl: '',
     authorUrl: '',

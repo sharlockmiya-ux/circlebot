@@ -1,6 +1,7 @@
 const { MessageFlags } = require('discord.js');
-const { getOrCreateSession, updateDraft } = require('../sessionStore');
+const { getOrCreateSession, updateDraft, resetDraft } = require('../sessionStore');
 const { buildPreviewEmbed, buildBuilderComponents, presetColorToInt } = require('../ui');
+const { getTemplateDraft } = require('../templates');
 
 async function handleEmbedSelects(interaction, ctx) {
   if (!interaction.isStringSelectMenu() && !interaction.isChannelSelectMenu()) return;
@@ -16,6 +17,40 @@ async function handleEmbedSelects(interaction, ctx) {
 
     const chosen = interaction.values?.[0] || null;
     updateDraft(session, { targetChannelId: chosen });
+
+    await interaction.deferUpdate();
+
+    const embed = buildPreviewEmbed(session.draft);
+    const components = buildBuilderComponents(session.draft);
+    await interaction.editReply({ embeds: [embed], components });
+    return;
+  }
+
+  // ===== ビルダーパネル：テンプレ選択 =====
+  if (interaction.isStringSelectMenu() && interaction.customId === 'embed:template') {
+    const guildId = interaction.guildId || null;
+    const channelId = interaction.channelId || null;
+    const userId = interaction.user?.id;
+
+    const session = getOrCreateSession(guildId, channelId, userId);
+    const chosen = interaction.values?.[0] || 'none';
+
+    if (chosen === 'none') {
+      updateDraft(session, { templateId: null });
+    } else {
+      const tmpl = getTemplateDraft(chosen);
+      if (tmpl) {
+        // 送信先/タイムスタンプは維持して、内容はテンプレで上書き
+        const keep = {
+          targetChannelId: session.draft?.targetChannelId || channelId,
+          timestamp: !!session.draft?.timestamp,
+        };
+        resetDraft(session);
+        updateDraft(session, { ...keep, templateId: chosen, ...tmpl });
+      } else {
+        updateDraft(session, { templateId: null });
+      }
+    }
 
     await interaction.deferUpdate();
 
