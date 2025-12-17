@@ -12,27 +12,27 @@ async function tryHandleMotiAdminSlash(interaction, ctx, opts = {}) {
 
   const { commandName } = interaction;
 
-  if (commandName === 'moti_season_close') {
+  if (commandName === 'season_close') {
     await handleMotiSeasonClose(interaction, ctx);
     return true;
   }
 
-  if (commandName === 'moti_season_close_link') {
+  if (commandName === 'season_link_close') {
     await handleMotiSeasonCloseLink(interaction, ctx);
     return true;
   }
 
-  if (commandName === 'moti_month_report') {
+  if (commandName === 'month_report') {
     await handleMotiMonthReport(interaction, ctx);
     return true;
   }
 
-  if (commandName === 'moti_report') {
+  if (commandName === 'contest_report') {
     await handleMotiReport(interaction, ctx, opts);
     return true;
   }
 
-  if (commandName === 'moti_report_link') {
+  if (commandName === 'contest_link_report') {
     await handleMotiReportLink(interaction, ctx, opts);
     return true;
   }
@@ -42,12 +42,12 @@ async function tryHandleMotiAdminSlash(interaction, ctx, opts = {}) {
     return true;
   }
 
-  if (commandName === 'moti_notion') {
+  if (commandName === 'export_notion') {
     await handleMotiNotion(interaction, ctx, opts);
     return true;
   }
 
-  if (commandName === 'moti_notion_link') {
+  if (commandName === 'export_link_notion') {
     await handleMotiNotionLink(interaction, ctx, opts);
     return true;
   }
@@ -59,7 +59,7 @@ async function handleMotiSeasonClose(interaction, ctx) {
   const { client, CURRENT_SEASON, MOTI_NOTICE_CHANNEL_ID } = ctx;
   const { commandName } = interaction;
             // ---------- /moti_season_close → シーズン終了案内テンプレ（運営専用） ----------
-        if (commandName === 'moti_season_close') {
+        if (commandName === 'season_close') {
           try {
             const member = interaction.member;
             if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -141,7 +141,7 @@ async function handleMotiSeasonCloseLink(interaction, ctx) {
   const { client, CURRENT_SEASON, MOTI_NOTICE_CHANNEL_ID } = ctx;
   const { commandName } = interaction;
             // ---------- /moti_season_close_link → シーズン終了案内テンプレ（運営専用） ----------
-        if (commandName === 'moti_season_close_link') {
+        if (commandName === 'season_link_close') {
           try {
             const member = interaction.member;
             if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -223,7 +223,7 @@ async function handleMotiMonthReport(interaction, ctx) {
   const { getAllMonthlyRecords } = ctx;
   const { commandName } = interaction;
               // ---------- /moti_month_report → 月間モチベ集計（運営専用） ----------
-        if (commandName === 'moti_month_report') {
+        if (commandName === 'month_report') {
           // 引数の month を正規化（YYYY-MM）
           const rawMonth = interaction.options.getString('month');
           let monthKey = '';
@@ -344,7 +344,7 @@ async function handleMotiReport(interaction, ctx, opts) {
   const { season, seasonLabel } = opts;
   const { commandName } = interaction;
         // ---------- /moti_report → 全員分（運営専用） ----------
-        if (commandName === 'moti_report') {
+        if (commandName === 'contest_report') {
           const member = interaction.member;
           if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
             await interaction.reply({
@@ -442,7 +442,7 @@ async function handleMotiReportLink(interaction, ctx, opts) {
   const { commandName } = interaction;
 
   // ---------- /moti_report_link → 全員分（運営専用 / リンクコンテスト） ----------
-  if (commandName !== 'moti_report_link') return;
+  if (commandName !== 'contest_link_report') return;
 
   const member = interaction.member;
   if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -571,7 +571,7 @@ async function handleMotiNotionLink(interaction, ctx, opts) {
   const { commandName } = interaction;
 
   // ---------- /moti_notion_link → Notion用表（運営専用 / リンクコンテスト） ----------
-  if (commandName !== 'moti_notion_link') return;
+  if (commandName !== 'export_link_notion') return;
 
   const member = interaction.member;
   if (!member || !member.permissions || !member.permissions.has(PermissionFlagsBits.ManageGuild)) {
@@ -760,7 +760,7 @@ async function handleMotiNotion(interaction, ctx, opts) {
   const { season, seasonLabel } = opts;
   const { commandName } = interaction;
         // ---------- /moti_notion → Notion用表（運営専用） ----------
-        if (commandName === 'moti_notion') {
+        if (commandName === 'export_notion') {
           const member = interaction.member;
           if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
             await interaction.reply({

@@ -59,7 +59,7 @@ async function handleMotiSlash(interaction, ctx) {
         if (await tryHandleMotiAdminSlash(interaction, ctx, { season, seasonLabel })) return;
 
 
-       if (commandName === 'moti_input') {
+       if (commandName === 'input_contest') {
     const modal = new ModalBuilder()
       .setCustomId('motiInputModal') // シーズンは customId ではなくフィールドで持つ
       .setTitle('モチベ記録入力');
@@ -119,7 +119,7 @@ async function handleMotiSlash(interaction, ctx) {
   }
 
 
-       if (commandName === 'moti_input_link') {
+       if (commandName === 'input_link') {
     const modal = new ModalBuilder()
       .setCustomId('motiLinkInputModal')
       .setTitle('リンクコンテスト記録入力');
@@ -179,7 +179,7 @@ async function handleMotiSlash(interaction, ctx) {
   }
 
               // ---------- /moti_month_input → 月間モチベ入力モーダル ----------
-        if (commandName === 'moti_month_input') {
+        if (commandName === 'input_month') {
     const modal = new ModalBuilder()
       .setCustomId('motiMonthInputModal')
       .setTitle('月間モチベ調査');
@@ -237,7 +237,7 @@ async function handleMotiSlash(interaction, ctx) {
 
 
                   // /moti_me → 自分の推移
-        if (commandName === 'moti_me') {
+        if (commandName === 'contest_me') {
           const userId = interaction.user.id;
           const myRecords = await getRecordsByUser(userId, season);
 
@@ -320,7 +320,7 @@ async function handleMotiSlash(interaction, ctx) {
 
 
                   // /moti_me_link → 自分の推移（リンクコンテスト）
-        if (commandName === 'moti_me_link') {
+        if (commandName === 'contest_link_me') {
           const userId = interaction.user.id;
           const myRecords = await getLinkContestRecordsByUser(userId, season);
 
@@ -401,7 +401,7 @@ async function handleMotiSlash(interaction, ctx) {
           return;
         }
               // ---------- /moti_month_me → 月間モチベ推移 ----------
-        if (commandName === 'moti_month_me') {
+        if (commandName === 'month_me') {
           const user = interaction.user;
           const userId = user.id;
 
@@ -472,7 +472,7 @@ async function handleMotiSlash(interaction, ctx) {
         }
 
               // /moti_summary → 直近5シーズンのシーズン別まとめ
-        if (commandName === 'moti_summary') {
+        if (commandName === 'summary_me') {
           const user = interaction.user;
           const summary = await buildSeasonSummaryForUser(user.id, user.username, 5);
 
@@ -519,7 +519,7 @@ async function handleMotiSlash(interaction, ctx) {
         }
 
         // /moti_summary_all → 全シーズンのシーズン別まとめ
-        if (commandName === 'moti_summary_all') {
+        if (commandName === 'summary_me_all') {
           const user = interaction.user;
           const summary = await buildSeasonSummaryForUser(user.id, user.username, null);
 
@@ -566,7 +566,7 @@ async function handleMotiSlash(interaction, ctx) {
         }
 
         // /moti_summary_link → 直近5シーズンのシーズン別まとめ（リンクコンテスト）
-        if (commandName === 'moti_summary_link') {
+        if (commandName === 'summary_link_me') {
           const user = interaction.user;
           const summary = await buildLinkContestSeasonSummaryForUser(user.id, user.username, 5);
 
@@ -613,7 +613,7 @@ async function handleMotiSlash(interaction, ctx) {
         }
 
         // /moti_summary_link_all → 全シーズンのシーズン別まとめ（リンクコンテスト）
-        if (commandName === 'moti_summary_link_all') {
+        if (commandName === 'summary_link_me_all') {
           const user = interaction.user;
           const summary = await buildLinkContestSeasonSummaryForUser(user.id, user.username, null);
 
@@ -660,7 +660,7 @@ async function handleMotiSlash(interaction, ctx) {
         }
 
         // 使い方ガイド（全員が利用可・エフェメラル表示）
-        if (commandName === 'moti_help') {
+        if (commandName === 'help_general') {
           const embed = new EmbedBuilder()
             .setTitle('📘 成績通知表システムの使い方')
             .setColor(0x3b82f6)

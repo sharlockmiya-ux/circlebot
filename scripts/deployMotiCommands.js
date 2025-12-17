@@ -85,7 +85,7 @@ try {
 const commands = [
   // --- シーズン記録系 ---
   new SlashCommandBuilder()
-    .setName('moti_input')
+    .setName('input_contest')
     .setDescription('現在の順位と育成数を記録します。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -95,7 +95,7 @@ const commands = [
 
   // --- リンクコンテスト記録系 ---
   new SlashCommandBuilder()
-    .setName('moti_input_link')
+    .setName('input_link')
     .setDescription('リンクコンテストの順位と育成数を記録します。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -104,7 +104,7 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName('moti_me')
+    .setName('contest_me')
     .setDescription('自分の順位・育成数の推移を確認します。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -113,7 +113,7 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName('moti_me_link')
+    .setName('contest_link_me')
     .setDescription('自分のリンクコンテスト順位・育成数の推移を確認します。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -122,23 +122,23 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName('moti_summary')
+    .setName('summary_me')
     .setDescription('直近のシーズン別サマリーを表示します。'),
 
   new SlashCommandBuilder()
-    .setName('moti_summary_all')
+    .setName('summary_me_all')
     .setDescription('全シーズン分のシーズン別成績まとめを表示します。'),
 
   new SlashCommandBuilder()
-    .setName('moti_summary_link')
+    .setName('summary_link_me')
     .setDescription('リンクコンテストの直近のシーズン別サマリーを表示します。'),
 
   new SlashCommandBuilder()
-    .setName('moti_summary_link_all')
+    .setName('summary_link_me_all')
     .setDescription('リンクコンテストの全シーズン分のシーズン別成績まとめを表示します。'),
 
   new SlashCommandBuilder()
-    .setName('moti_report')
+    .setName('contest_report')
     .setDescription('指定シーズンの成績推移レポートを表示します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -150,7 +150,7 @@ const commands = [
 
   
   new SlashCommandBuilder()
-    .setName('moti_report_link')
+    .setName('contest_link_report')
     .setDescription('指定シーズンのリンクコンテスト成績推移レポートを表示します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -161,7 +161,7 @@ const commands = [
     .setDMPermission(false),
 
 new SlashCommandBuilder()
-    .setName('moti_notion')
+    .setName('export_notion')
     .setDescription('Notion用のサマリー表を出力します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -173,7 +173,7 @@ new SlashCommandBuilder()
 
   
   new SlashCommandBuilder()
-    .setName('moti_notion_link')
+    .setName('export_link_notion')
     .setDescription('リンクコンテストのNotion用サマリー表を出力します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -184,7 +184,7 @@ new SlashCommandBuilder()
     .setDMPermission(false),
 
 new SlashCommandBuilder()
-    .setName('moti_help')
+    .setName('help_general')
     .setDescription('成績通知表システムの使い方を表示します。'),
 
   // --- embed（誰でも利用可） ---
@@ -195,16 +195,16 @@ new SlashCommandBuilder()
 
   // --- 月間モチベ調査（一般メンバー用） ---
   new SlashCommandBuilder()
-    .setName('moti_month_input')
+    .setName('input_month')
     .setDescription('月間モチベーション（育成数・ファン数）を記録します。'),
 
   new SlashCommandBuilder()
-    .setName('moti_month_me')
+    .setName('month_me')
     .setDescription('自分の月間モチベ推移を確認します。'),
 
   // --- 月間モチベ集計（運営専用） ---
   new SlashCommandBuilder()
-    .setName('moti_month_report')
+    .setName('month_report')
     .setDescription('指定した月の月間モチベ集計を表示します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('month')
@@ -228,7 +228,7 @@ new SlashCommandBuilder()
 
   // --- シーズン終了報告（運営専用） ---
   new SlashCommandBuilder()
-    .setName('moti_season_close')
+    .setName('season_close')
     .setDescription('シーズン終了時に、成績一覧を通知チャンネルへ投稿します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
@@ -239,7 +239,7 @@ new SlashCommandBuilder()
     .setDMPermission(false),
 
   new SlashCommandBuilder()
-    .setName('moti_season_close_link')
+    .setName('season_link_close')
     .setDescription('リンクコンテストのシーズン終了時に、成績一覧を通知チャンネルへ投稿します（運営専用）。')
     .addStringOption(opt =>
       opt.setName('season')
