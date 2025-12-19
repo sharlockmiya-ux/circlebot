@@ -87,29 +87,28 @@ async function handleMotiSeasonClose(interaction, ctx) {
               });
               return;
             }
-
             const embed = new EmbedBuilder()
-              .setTitle(`🏁 シーズン ${seasonLabel} 終了のご案内`)
               .setColor(0x3b82f6)
               .setDescription([
+                `# :checkered_flag:シーズン${seasonLabel} 終了のご案内`,
                 '今シーズンもコンテストお疲れさまでした。',
-                `本メッセージは、シーズン **${seasonLabel}** の終了に伴う育成入力のご案内です。`,
+                `本メッセージは、シーズン**${seasonLabel}**の終了に伴う育成入力のご案内です。`,
                 '',
                 '以下の要領で、今期の最終成績のご入力をお願いいたします。',
                 '',
                 '【入力方法】',
-                '/moti_input',
-                '・season: 該当シーズン（例: S35）',
-                '・現在の順位（終了時点の順位）',
-                '・現在の育成数（終了時点の累計）',
+                '`/input_contest`',
+                '➤入力項目：',
+                '- 対象シーズン（任意）… S1 など。',
+                '- 現在の順位 … 数字のみ',
+                '- 現在の育成数 … 数字のみ（その時点での累計育成回数）',
                 '',
                 '【任意の振り返り】',
-                '/moti_me … ご自身の成績推移の確認',
-                '/moti_summary / /moti_summary_all … シーズンごとのサマリー確認',
-              ].join('\n'))
-              .setFooter({
-                text: '※入力いただいた成績は、今後のレポートおよび運営判断の参考とさせていただきます。',
-              });
+                '`/contest_me`… ご自身の成績推移の確認',
+                '`/summary_me`  `/summary_me_all` … シーズンごとのサマリー確認',
+                '',
+                '※入力いただいた成績は、今後のレポートおよび運営判断の参考とさせていただきます。',
+              ].join('\n'));
 
             await channel.send({ embeds: [embed] });
 
@@ -169,29 +168,28 @@ async function handleMotiSeasonCloseLink(interaction, ctx) {
               });
               return;
             }
-
             const embed = new EmbedBuilder()
-              .setTitle(`🏁 シーズン ${seasonLabel} 終了のご案内`)
               .setColor(0x3b82f6)
               .setDescription([
+                `# :checkered_flag:シーズン${seasonLabel} 終了のご案内`,
                 '今シーズンもリンクコンテストお疲れさまでした。',
-                `本メッセージは、シーズン **${seasonLabel}** の終了に伴う育成入力のご案内です。`,
+                `本メッセージは、シーズン**${seasonLabel}**の終了に伴う育成入力のご案内です。`,
                 '',
                 '以下の要領で、今期の最終成績のご入力をお願いいたします。',
                 '',
                 '【入力方法】',
-                '/moti_input_link',
-                '・season: 該当シーズン（例: S35）',
-                '・現在の順位（終了時点の順位）',
-                '・現在の育成数（終了時点の累計）',
+                '`/input_link`',
+                '➤入力項目：',
+                '- 対象シーズン（任意）… S1 など。',
+                '- 現在の順位 … 数字のみ',
+                '- 現在の育成数 … 数字のみ（その時点での累計育成回数）',
                 '',
                 '【任意の振り返り】',
-                '/moti_me_link … ご自身の成績推移の確認',
-                '/moti_summary_link / /moti_summary_link_all … シーズンごとのサマリー確認',
-              ].join('\n'))
-              .setFooter({
-                text: '※入力いただいた成績は、今後のレポートおよび運営判断の参考とさせていただきます。',
-              });
+                '`/contest_link_me`… ご自身の成績推移の確認',
+                '`/summary_link_me`  `/summary_link_me_all` … シーズンごとのサマリー確認',
+                '',
+                '※入力いただいた成績は、今後のレポートおよび運営判断の参考とさせていただきます。',
+              ].join('\n'));
 
             await channel.send({ embeds: [embed] });
 
