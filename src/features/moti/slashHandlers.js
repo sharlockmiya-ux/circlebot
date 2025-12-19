@@ -730,10 +730,30 @@ async function handleMotiSlash(interaction, ctx) {
             .setColor(0x3b82f6)
             .setDescription(helpText);
 
-          await interaction.reply({
-            embeds: [embed],
-            flags: MessageFlags.Ephemeral, // 自分にだけ見える
-          });
+          // 3秒以内に応答できないと Unknown interaction になるため、先に defer してから edit する
+          try {
+            if (!interaction.deferred && !interaction.replied) {
+              await interaction.deferReply({ ephemeral: true });
+            }
+          } catch (err) {
+            // すでに期限切れ/無効（10062）などは何もできないので静かに終了
+            if (err && (err.code === 10062 || err.code === 40060)) return;
+            throw err;
+          }
+
+          try {
+            if (interaction.deferred) {
+              await interaction.editReply({ embeds: [embed] });
+            } else {
+              await interaction.reply({
+                embeds: [embed],
+                flags: MessageFlags.Ephemeral,
+              });
+            }
+          } catch (err) {
+            if (err && (err.code === 10062 || err.code === 40060)) return;
+            throw err;
+          }
           return;
         }
 
