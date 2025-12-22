@@ -200,7 +200,7 @@ async function handleMotiSlash(interaction, ctx) {
 
     const fansInput = new TextInputBuilder()
       .setCustomId('fans')
-      .setLabel('今月増えたファン数')
+      .setLabel('現在のファン数（累計）')
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setPlaceholder('例: 50000');
