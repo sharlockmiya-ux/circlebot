@@ -30,7 +30,9 @@ function createSheetsClient() {
 
 // 1行をオブジェクトに変換（ヘッダー行は呼ばない想定）
 function rowToMonthlyRecord(row) {
-  const [userId, username, timestamp, monthKey, grow, fans] = row;
+  // 旧: A:F = userId, username, timestamp, monthKey, grow, fans
+  // 新: A:H = userId, username, timestamp, monthKey, grow(diff), fans(diff), grow_total, fans_total
+  const [userId, username, timestamp, monthKey, grow, fans, growTotal, fansTotal] = row;
 
   if (!userId) return null;
 
@@ -46,11 +48,16 @@ function rowToMonthlyRecord(row) {
     monthKey: mk,
     grow: Number(grow) || 0,
     fans: Number(fans) || 0,
+    // 新列（存在しない旧データでは undefined になる）
+    growTotal: growTotal === undefined ? undefined : (Number(growTotal) || 0),
+    fansTotal: fansTotal === undefined ? undefined : (Number(fansTotal) || 0),
   };
 }
 
 // ----- 1件追加 -----
-async function appendMonthlyRecord(userId, username, grow, fans, monthKeyInput) {
+// grow/fans は「増加分（diff）」を保存する想定。
+// growTotal/fansTotal は「ゲーム上の実累計」を保存する想定。
+async function appendMonthlyRecord(userId, username, grow, fans, monthKeyInput, growTotal, fansTotal) {
   const sheets = createSheetsClient();
 
   const now = new Date();
@@ -68,11 +75,14 @@ async function appendMonthlyRecord(userId, username, grow, fans, monthKeyInput) 
     monthKey,
     Number(grow) || 0,
     Number(fans) || 0,
+    // 新列（合計）：未指定でも 0 を入れておく（列数揃えのため）
+    growTotal === undefined ? '' : (Number(growTotal) || 0),
+    fansTotal === undefined ? '' : (Number(fansTotal) || 0),
   ]];
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: '月間調査!A:F',
+    range: '月間調査!A:H',
     valueInputOption: 'USER_ENTERED',
     requestBody: { values },
   });
@@ -84,7 +94,8 @@ async function getAllMonthlyRecords() {
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: '月間調査!A:F',
+    // 旧シートは A:F しかなくても OK（足りない列は undefined になる）
+    range: '月間調査!A:H',
   });
 
   const rows = res.data.values || [];

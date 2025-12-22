@@ -209,8 +209,22 @@ async function handleMotiModalSubmit(interaction, ctx) {
             return;
           }
 
-          // これまでの「増加分（grow）」の合計 = いままでの累計育成数
-          const previousTotal = myMonthlyRecords.reduce(
+          // ===== 前月までの累計（実累計）を推定 =====
+          const toMonthNum = (mk) => {
+            const m = String(mk || '').match(/^(\d{4})-(\d{2})$/);
+            if (!m) return null;
+            return (Number(m[1]) * 12) + Number(m[2]);
+          };
+
+          const targetMonthNum = toMonthNum(monthKey);
+          const previousRecords = myMonthlyRecords.filter((r) => {
+            const n = toMonthNum(r.monthKey);
+            if (n === null || targetMonthNum === null) return true;
+            return n < targetMonthNum;
+          });
+
+          // grow: 旧データは diff 保存（grow の合計で累計が復元できる）
+          const previousTotal = previousRecords.reduce(
             (sum, r) => sum + (r.grow || 0),
             0,
           );
@@ -227,13 +241,35 @@ async function handleMotiModalSubmit(interaction, ctx) {
             return;
           }
 
-          // 保存するのは「今月の増加分（diff）」のまま
+          // fans: 新列（fansTotal）があればそれを優先。なければ旧列（fans）を「実累計」とみなす。
+          let previousFansTotal = 0;
+          const sortedPrev = previousRecords.slice().sort((a, b) => {
+            const na = toMonthNum(a.monthKey) || 0;
+            const nb = toMonthNum(b.monthKey) || 0;
+            if (na !== nb) return na - nb;
+            return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
+          });
+
+          const withFansTotal = sortedPrev.filter((r) => typeof r.fansTotal === 'number' && !Number.isNaN(r.fansTotal));
+          if (withFansTotal.length > 0) {
+            previousFansTotal = withFansTotal[withFansTotal.length - 1].fansTotal || 0;
+          } else if (sortedPrev.length > 0) {
+            const lastLegacy = sortedPrev[sortedPrev.length - 1];
+            previousFansTotal = Number(lastLegacy.fans) || 0;
+          }
+
+          let fansDiff = fans - previousFansTotal;
+          if (fansDiff < 0) fansDiff = 0;
+
+          // 保存するのは「今月の増加分（diff）」のまま（grow/fans は diff、total 列に累計）
           await appendMonthlyRecord(
             userId,
             username,
             diff,
-            fans,
+            fansDiff,
             monthKey,
+            currentTotal,
+            fans,
           );
 
           await interaction.editReply({
