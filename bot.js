@@ -145,16 +145,7 @@ function ping(url, opts = {}) {
   });
 }
 
-if (process.env.NET_DEBUG === '1') {
-  // discord.js がログイン時に参照するのは gateway/bot なので、ここだけ確認します（余計なリクエストを増やさない）
-  if (TOKEN) {
-    ping('https://discord.com/api/v10/gateway/bot', {
-      headers: { Authorization: `Bot ${TOKEN}` },
-    });
-  } else {
-    console.log('[net] NET_DEBUG=1 but TOKEN is empty');
-  }
-}
+
 // --- end optional network debug ---
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
