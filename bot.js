@@ -95,7 +95,8 @@ console.log(
   `tokenLen=${TOKEN ? TOKEN.length : 0} ` +
   `tokenHasWhitespace=${TOKEN ? /\s/.test(TOKEN) : false} ` +
   `channelId=${CHANNEL_ID || 'null'} ` +
-  `profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'}`
+  `profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'} ` +
+  `netDebug=${((process.env.NET_DEBUG || '').trim() || 'unset')}`
 );
 
 // --- optional network debug (NET_DEBUG=1 のときだけ実行) ---
@@ -145,7 +146,16 @@ function ping(url, opts = {}) {
   });
 }
 
-
+if ((process.env.NET_DEBUG || '').trim() === '1') {
+  // discord.js がログイン時に参照するのは gateway/bot なので、ここだけ確認します（余計なリクエストを増やさない）
+  if (TOKEN) {
+    ping('https://discord.com/api/v10/gateway/bot', {
+      headers: { Authorization: `Bot ${TOKEN}` },
+    });
+  } else {
+    console.log('[net] NET_DEBUG=1 but TOKEN is empty');
+  }
+}
 // --- end optional network debug ---
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
