@@ -1,3 +1,12 @@
+const dns = require('dns');
+try {
+  dns.setDefaultResultOrder('ipv4first');
+  console.log('✅ dns: ipv4first');
+} catch (e) {
+  console.warn('dns.setDefaultResultOrder failed:', e?.message || e);
+}
+
+
 // --- tiny health server for Render (moved to src/core) ---
 const { startHealthServer } = require('./src/core/healthServer');
 const { installProcessGuards } = require('./src/core/processGuards');
@@ -12,15 +21,6 @@ console.log("Boot: starting bot.js v3");
 
 // ① dotenv はここで1回だけ呼ぶ
 require('dotenv').config();
-
-// IPv6優先などでGateway接続が不安定になる環境向け：IPv4優先
-const dns = require('dns');
-try {
-  dns.setDefaultResultOrder('ipv4first');
-  console.log('✅ dns: ipv4first');
-} catch (e) {
-  console.warn('dns.setDefaultResultOrder failed:', e?.message || e);
-}
 
 // ② discord.js の import を「拡張」する
 const {
@@ -95,68 +95,45 @@ console.log(
   `tokenLen=${TOKEN ? TOKEN.length : 0} ` +
   `tokenHasWhitespace=${TOKEN ? /\s/.test(TOKEN) : false} ` +
   `channelId=${CHANNEL_ID || 'null'} ` +
-  `profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'} ` +
-  `netDebug=${((process.env.NET_DEBUG || '').trim() || 'unset')}`
+  `profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'}`
 );
 
-// --- optional network debug (NET_DEBUG=1 のときだけ実行) ---
-// ※ Discord側の429確認用。普段は NET_DEBUG を未設定のまま運用してください。
+
+
 const https = require('https');
 
 function ping(url, opts = {}) {
   return new Promise((resolve) => {
     const req = https.request(url, opts, (res) => {
-      const ra = res.headers['retry-after'];
-      const xra = res.headers['x-ratelimit-reset-after'];
-      const global = res.headers['x-ratelimit-global'];
-
-      let body = '';
-      res.on('data', (d) => { body += d; });
-      res.on('end', () => {
-        let retryAfterSec = null;
-        try {
-          const j = JSON.parse(body || '{}');
-          if (typeof j.retry_after === 'number') retryAfterSec = j.retry_after;
-        } catch (_) {}
-
-        console.log(
-          `[net] ${url} -> ${res.statusCode}` +
-          (ra ? ` retry-after=${ra}` : '') +
-          (xra ? ` x-reset-after=${xra}` : '') +
-          (global ? ` global=${global}` : '') +
-          (retryAfterSec != null ? ` body.retry_after=${retryAfterSec}` : '')
-        );
-        resolve();
-      });
+      console.log(`[net] ${url} -> ${res.statusCode}`);
       res.resume();
+      resolve();
     });
-
     req.on('error', (e) => {
       console.error(`[net] ${url} error:`, e?.message || e);
       resolve();
     });
-
     req.setTimeout(10000, () => {
       console.error(`[net] ${url} timeout`);
       req.destroy();
       resolve();
     });
-
     req.end();
   });
 }
 
-if ((process.env.NET_DEBUG || '').trim() === '1') {
-  // discord.js がログイン時に参照するのは gateway/bot なので、ここだけ確認します（余計なリクエストを増やさない）
-  if (TOKEN) {
-    ping('https://discord.com/api/v10/gateway/bot', {
-      headers: { Authorization: `Bot ${TOKEN}` },
-    });
-  } else {
-    console.log('[net] NET_DEBUG=1 but TOKEN is empty');
-  }
+// ① Discord自体に到達できるか（トークン不要）
+ping('https://discord.com/api/v10/gateway');
+
+// ② トークンがAPI的に通るか（トークン内容は出さない）
+if (TOKEN) {
+  ping('https://discord.com/api/v10/users/@me', {
+    headers: { Authorization: `Bot ${TOKEN}` },
+  });
 }
-// --- end optional network debug ---
+
+
+
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
 
@@ -464,24 +441,6 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,  // 👈 これを追加
   ],
 });
-
-// --- diagnostics (運用ログ) ---
-client.rest.on('rateLimited', (info) => {
-  console.warn('⏳ [rest rateLimited]', {
-    route: info.route,
-    method: info.method,
-    global: info.global,
-    timeToReset: info.timeToReset,
-    limit: info.limit,
-  });
-});
-
-client.on('error', (e) => console.error('client error:', e));
-client.on('warn', (m) => console.warn('client warn:', m));
-client.on('shardError', (e) => console.error('shardError:', e));
-client.on('shardDisconnect', (event) => console.warn('shardDisconnect:', event?.code, event?.reason));
-client.on('shardReconnecting', () => console.warn('shardReconnecting'));
-// --- end diagnostics ---
 
 // v15: VC監視は events/voiceStateUpdate へ分離
 registerVoiceStateUpdate(client);
@@ -839,22 +798,6 @@ registerInteractionCreate(client, {
 
 
 // ===== Botログイン =====
-console.log('➡️ [login] calling client.login()...');
-
-// ログインが“ずっとpending”になった場合に状況が見えるようにする（落とさない）
-const __loginStartedAt = Date.now();
-const __loginWatchdog = setInterval(() => {
-  const elapsed = Math.floor((Date.now() - __loginStartedAt) / 1000);
-  if (client.isReady()) {
-    console.log(`✅ [login] client is ready (elapsed=${elapsed}s)`);
-    clearInterval(__loginWatchdog);
-    return;
-  }
-  const wsStatus = client.ws?.status ?? 'unknown';
-  const shardCount = client.ws?.shards?.size ?? 'n/a';
-  console.warn(`… [login] still pending (elapsed=${elapsed}s) wsStatus=${wsStatus} shards=${shardCount}`);
-}, 15000);
-
-client.login(TOKEN)
-  .then(() => console.log('✅ [login] client.login() resolved'))
-  .catch((err) => console.error('❌ [login] client.login() rejected:', err));
+client.login(TOKEN).catch(err => {
+  console.error("❌ ログイン失敗:", err);
+});
