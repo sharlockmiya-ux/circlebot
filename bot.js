@@ -1,3 +1,12 @@
+const dns = require('dns');
+try {
+  dns.setDefaultResultOrder('ipv4first');
+  console.log('✅ dns: ipv4first');
+} catch (e) {
+  console.warn('dns.setDefaultResultOrder failed:', e?.message || e);
+}
+
+
 // --- tiny health server for Render (moved to src/core) ---
 const { startHealthServer } = require('./src/core/healthServer');
 const { installProcessGuards } = require('./src/core/processGuards');
@@ -78,9 +87,53 @@ const {
   onReadyVcInit,
 } = require('./src/events/voiceStateUpdate');
 
-console.log(`[boot] node=${process.version} tokenLen=${TOKEN ? TOKEN.length : 0} channelId=${CHANNEL_ID || 'null'} profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'}`);
-
+const TOKEN = process.env.DISCORD_TOKEN;
 const CHANNEL_ID = cfg.channels?.rulesSummary;
+
+console.log(
+  `[boot] node=${process.version} ` +
+  `tokenLen=${TOKEN ? TOKEN.length : 0} ` +
+  `tokenHasWhitespace=${TOKEN ? /\s/.test(TOKEN) : false} ` +
+  `channelId=${CHANNEL_ID || 'null'} ` +
+  `profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'}`
+);
+
+
+
+const https = require('https');
+
+function ping(url, opts = {}) {
+  return new Promise((resolve) => {
+    const req = https.request(url, opts, (res) => {
+      console.log(`[net] ${url} -> ${res.statusCode}`);
+      res.resume();
+      resolve();
+    });
+    req.on('error', (e) => {
+      console.error(`[net] ${url} error:`, e?.message || e);
+      resolve();
+    });
+    req.setTimeout(10000, () => {
+      console.error(`[net] ${url} timeout`);
+      req.destroy();
+      resolve();
+    });
+    req.end();
+  });
+}
+
+// ① Discord自体に到達できるか（トークン不要）
+ping('https://discord.com/api/v10/gateway');
+
+// ② トークンがAPI的に通るか（トークン内容は出さない）
+if (TOKEN) {
+  ping('https://discord.com/api/v10/users/@me', {
+    headers: { Authorization: `Bot ${TOKEN}` },
+  });
+}
+
+
+
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
 
