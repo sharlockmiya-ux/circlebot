@@ -1,12 +1,3 @@
-const dns = require('dns');
-try {
-  dns.setDefaultResultOrder('ipv4first');
-  console.log('✅ dns: ipv4first');
-} catch (e) {
-  console.warn('dns.setDefaultResultOrder failed:', e?.message || e);
-}
-
-
 // --- tiny health server for Render (moved to src/core) ---
 const { startHealthServer } = require('./src/core/healthServer');
 const { installProcessGuards } = require('./src/core/processGuards');
@@ -21,6 +12,15 @@ console.log("Boot: starting bot.js v3");
 
 // ① dotenv はここで1回だけ呼ぶ
 require('dotenv').config();
+
+// IPv6優先などでGateway接続が不安定になる環境向け：IPv4優先
+const dns = require('dns');
+try {
+  dns.setDefaultResultOrder('ipv4first');
+  console.log('✅ dns: ipv4first');
+} catch (e) {
+  console.warn('dns.setDefaultResultOrder failed:', e?.message || e);
+}
 
 // ② discord.js の import を「拡張」する
 const {
@@ -98,10 +98,8 @@ console.log(
   `profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'}`
 );
 
-
-
+// --- optional network debug (NET_DEBUG=1 のときだけ実行) ---
 const https = require('https');
-
 function ping(url, opts = {}) {
   return new Promise((resolve) => {
     const req = https.request(url, opts, (res) => {
@@ -121,19 +119,15 @@ function ping(url, opts = {}) {
     req.end();
   });
 }
-
-// ① Discord自体に到達できるか（トークン不要）
-ping('https://discord.com/api/v10/gateway');
-
-// ② トークンがAPI的に通るか（トークン内容は出さない）
-if (TOKEN) {
-  ping('https://discord.com/api/v10/users/@me', {
-    headers: { Authorization: `Bot ${TOKEN}` },
-  });
+if (process.env.NET_DEBUG === '1') {
+  ping('https://discord.com/api/v10/gateway');
+  if (TOKEN) {
+    ping('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bot ${TOKEN}` },
+    });
+  }
 }
-
-
-
+// --- end optional network debug ---
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
 
@@ -441,6 +435,24 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,  // 👈 これを追加
   ],
 });
+
+// --- diagnostics (運用ログ) ---
+client.rest.on('rateLimited', (info) => {
+  console.warn('⏳ [rest rateLimited]', {
+    route: info.route,
+    method: info.method,
+    global: info.global,
+    timeToReset: info.timeToReset,
+    limit: info.limit,
+  });
+});
+
+client.on('error', (e) => console.error('client error:', e));
+client.on('warn', (m) => console.warn('client warn:', m));
+client.on('shardError', (e) => console.error('shardError:', e));
+client.on('shardDisconnect', (event) => console.warn('shardDisconnect:', event?.code, event?.reason));
+client.on('shardReconnecting', () => console.warn('shardReconnecting'));
+// --- end diagnostics ---
 
 // v15: VC監視は events/voiceStateUpdate へ分離
 registerVoiceStateUpdate(client);
@@ -798,6 +810,7 @@ registerInteractionCreate(client, {
 
 
 // ===== Botログイン =====
-client.login(TOKEN).catch(err => {
-  console.error("❌ ログイン失敗:", err);
-});
+console.log('➡️ [login] calling client.login()...');
+client.login(TOKEN)
+  .then(() => console.log('✅ [login] client.login() resolved'))
+  .catch((err) => console.error('❌ [login] client.login() rejected:', err));
