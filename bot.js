@@ -99,32 +99,60 @@ console.log(
 );
 
 // --- optional network debug (NET_DEBUG=1 のときだけ実行) ---
+// ※ Discord側の429確認用。普段は NET_DEBUG を未設定のまま運用してください。
 const https = require('https');
+
 function ping(url, opts = {}) {
   return new Promise((resolve) => {
     const req = https.request(url, opts, (res) => {
-      console.log(`[net] ${url} -> ${res.statusCode}`);
+      const ra = res.headers['retry-after'];
+      const xra = res.headers['x-ratelimit-reset-after'];
+      const global = res.headers['x-ratelimit-global'];
+
+      let body = '';
+      res.on('data', (d) => { body += d; });
+      res.on('end', () => {
+        let retryAfterSec = null;
+        try {
+          const j = JSON.parse(body || '{}');
+          if (typeof j.retry_after === 'number') retryAfterSec = j.retry_after;
+        } catch (_) {}
+
+        console.log(
+          `[net] ${url} -> ${res.statusCode}` +
+          (ra ? ` retry-after=${ra}` : '') +
+          (xra ? ` x-reset-after=${xra}` : '') +
+          (global ? ` global=${global}` : '') +
+          (retryAfterSec != null ? ` body.retry_after=${retryAfterSec}` : '')
+        );
+        resolve();
+      });
       res.resume();
-      resolve();
     });
+
     req.on('error', (e) => {
       console.error(`[net] ${url} error:`, e?.message || e);
       resolve();
     });
+
     req.setTimeout(10000, () => {
       console.error(`[net] ${url} timeout`);
       req.destroy();
       resolve();
     });
+
     req.end();
   });
 }
-if (process.env.NET_DEBUG === '1') {
-  ping('https://discord.com/api/v10/gateway');
+
+if (process.env.NET_DEBUG === '0') {
+  // discord.js がログイン時に参照するのは gateway/bot なので、ここだけ確認します（余計なリクエストを増やさない）
   if (TOKEN) {
-    ping('https://discord.com/api/v10/users/@me', {
+    ping('https://discord.com/api/v10/gateway/bot', {
       headers: { Authorization: `Bot ${TOKEN}` },
     });
+  } else {
+    console.log('[net] NET_DEBUG=1 but TOKEN is empty');
   }
 }
 // --- end optional network debug ---
@@ -811,6 +839,21 @@ registerInteractionCreate(client, {
 
 // ===== Botログイン =====
 console.log('➡️ [login] calling client.login()...');
+
+// ログインが“ずっとpending”になった場合に状況が見えるようにする（落とさない）
+const __loginStartedAt = Date.now();
+const __loginWatchdog = setInterval(() => {
+  const elapsed = Math.floor((Date.now() - __loginStartedAt) / 1000);
+  if (client.isReady()) {
+    console.log(`✅ [login] client is ready (elapsed=${elapsed}s)`);
+    clearInterval(__loginWatchdog);
+    return;
+  }
+  const wsStatus = client.ws?.status ?? 'unknown';
+  const shardCount = client.ws?.shards?.size ?? 'n/a';
+  console.warn(`… [login] still pending (elapsed=${elapsed}s) wsStatus=${wsStatus} shards=${shardCount}`);
+}, 15000);
+
 client.login(TOKEN)
   .then(() => console.log('✅ [login] client.login() resolved'))
   .catch((err) => console.error('❌ [login] client.login() rejected:', err));
