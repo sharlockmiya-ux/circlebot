@@ -78,7 +78,8 @@ const {
   onReadyVcInit,
 } = require('./src/events/voiceStateUpdate');
 
-const TOKEN = process.env.DISCORD_TOKEN;
+console.log(`[boot] node=${process.version} tokenLen=${TOKEN ? TOKEN.length : 0} channelId=${CHANNEL_ID || 'null'} profile=${process.env.SERVER_CONFIG_NAME || process.env.SERVER_PROFILE || 'main'}`);
+
 const CHANNEL_ID = cfg.channels?.rulesSummary;
 
 // ※ VC関連の env/ユーティリティは src/features/vc/vcMonitor に移動
