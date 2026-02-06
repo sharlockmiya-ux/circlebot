@@ -145,7 +145,7 @@ function ping(url, opts = {}) {
   });
 }
 
-if (process.env.NET_DEBUG === '0') {
+if (process.env.NET_DEBUG === '1') {
   // discord.js がログイン時に参照するのは gateway/bot なので、ここだけ確認します（余計なリクエストを増やさない）
   if (TOKEN) {
     ping('https://discord.com/api/v10/gateway/bot', {
