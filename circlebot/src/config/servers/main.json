@@ -1,0 +1,132 @@
+{
+  "name": "main",
+  "guildId": "1431896098036781171",
+  "xGoodsNotifier": {
+    "enabled": true,
+    "channelId": "1470635185442914399",
+    "username": "zutapoke",
+    "keywordsAll": [
+      "業務連絡"
+    ],
+    "keywordsAny": [],
+    "minHourJst": 5,
+    "maxHourJst": 9,
+    "cronMaxResults": 5,
+    "testMaxResults": 5,
+    "excludeReplies": true
+  },
+  "channels": {
+    "log": "1431975383242113066",
+    "rolepanel": "1433797341642489936",
+    "announce": "",
+    "motiNotice": "1431902622318596167",
+    "vcTextNotify": "",
+    "rulesSummary": "1431904100081205268",
+    "inquiry": "1433797414598479922",
+    "guide": {
+      "newMemberNotify": "1431896098674577459",
+      "selfIntro": "1431903913833009253",
+      "contact": "1431896098674577460",
+      "gakumasChat": "1431902505209696256",
+      "evaluationStrategy": "1431902551124742205",
+      "formationShare": "1431902589590704129",
+      "reportCard": "1431902622318596167",
+      "contestChat": "1431902822953385984",
+      "scoreTool": "1432388076256231516",
+      "simulationShare": "1431902969795706941",
+      "produceFormationShare": "1431902996060700813",
+      "rehearsalAveShare": "1431903020517425332",
+      "voiceChat": "1431901093612486738",
+      "botSettings": "1431901117205319742",
+      "freeTalk": "1431903789853708338",
+      "otherGames": "1431903815946211338",
+      "foodTalk": "1431903867947319336",
+      "memoArchive": "1432335666959745044"
+    }
+  },
+  "roles": {
+    "announcement": "1435924112160587856",
+    "engineer": "1435677519075610634",
+    "admin": "1434074658059190343",
+    "subLeader": "1432727570419548323",
+    "operator": "1431975448119607316",
+    "idols": [
+      {
+        "label": "花海咲季",
+        "roleId": "1433209432581341305",
+        "customId": "role_hanamizaki"
+      },
+      {
+        "label": "月村手毬",
+        "roleId": "1433331636514062447",
+        "customId": "role_tsukimura"
+      },
+      {
+        "label": "藤田ことね",
+        "roleId": "1433332410623328398",
+        "customId": "role_fujita"
+      },
+      {
+        "label": "有村麻央",
+        "roleId": "1433332920667476068",
+        "customId": "role_arimura"
+      },
+      {
+        "label": "葛城リーリヤ",
+        "roleId": "1433333171453169794",
+        "customId": "role_katsuragi"
+      },
+      {
+        "label": "倉本千奈",
+        "roleId": "1433333415947669534",
+        "customId": "role_kuramoto"
+      },
+      {
+        "label": "紫雲清夏",
+        "roleId": "1433333595694563429",
+        "customId": "role_shiun"
+      },
+      {
+        "label": "篠澤広",
+        "roleId": "1433333784270606428",
+        "customId": "role_shinozawa"
+      },
+      {
+        "label": "姫崎莉波",
+        "roleId": "1433333959378604104",
+        "customId": "role_himezaki"
+      },
+      {
+        "label": "花海佑芽",
+        "roleId": "1433334170721189989",
+        "customId": "role_hanamiyume"
+      },
+      {
+        "label": "秦谷美鈴",
+        "roleId": "1433334387252138015",
+        "customId": "role_hataya"
+      },
+      {
+        "label": "十王星南",
+        "roleId": "1433334591179063316",
+        "customId": "role_juuo"
+      },
+      {
+        "label": "雨夜燕",
+        "roleId": "1433334807441702952",
+        "customId": "role_amayo"
+      },
+      {
+        "label": "賀陽燐羽",
+        "roleId": "1433703793140170753",
+        "customId": "role_kayo_rinba"
+      }
+    ]
+  },
+  "messages": {
+    "roleEmbedMessageId": "1434168544097996912"
+  },
+  "assets": {
+    "onlineMp3": "assets/sounds/online.mp3"
+  }
+}
