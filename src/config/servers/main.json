@@ -16,7 +16,7 @@
     ],
     "minHourJst": 6,
     "maxHourJst": 7,
-    "maxResults": 10
+    "maxResults": 5
   },
   "channels": {
     "log": "1431975383242113066",

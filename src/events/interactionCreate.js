@@ -22,6 +22,14 @@ function registerInteractionCreate(client, ctx) {
         if (handled) return;
       }
 
+      // ===== 重要: /xgoods は最速でACKしたいので優先ルート =====
+      // 他機能のハンドラを順に呼ぶ前に、対象コマンドなら先に処理して return する。
+      // （Unknown interaction / 10062 の予防）
+      if (interaction.isChatInputCommand() && interaction.commandName === 'xgoods') {
+        await handleXGoodsInteraction(interaction, { client, ...ctx });
+        return;
+      }
+
       // ===== embed（/embed ビルダー） =====
       await handleEmbedInteraction(interaction, { client, ...ctx });
 

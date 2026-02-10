@@ -42,11 +42,11 @@ function getXGoodsNotifierConfig() {
 
   // 投稿時刻の想定（JST）: 6:30頃
   const minHourJst =
-    Number(process.env.X_GOODS_NOTIFIER_MIN_HOUR_JST ?? section.minHourJst ?? 5);
+    Number(process.env.X_GOODS_NOTIFIER_MIN_HOUR_JST ?? section.minHourJst ?? 6);
   const maxHourJst =
-    Number(process.env.X_GOODS_NOTIFIER_MAX_HOUR_JST ?? section.maxHourJst ?? 9);
+    Number(process.env.X_GOODS_NOTIFIER_MAX_HOUR_JST ?? section.maxHourJst ?? 7);
 
-  const maxResults = Number(process.env.X_GOODS_NOTIFIER_MAX_RESULTS ?? section.maxResults ?? 10);
+  const maxResults = Number(process.env.X_GOODS_NOTIFIER_MAX_RESULTS ?? section.maxResults ?? 5);
 
 
   return {
