@@ -57,13 +57,35 @@ async function getUserIdByUsername(username, bearerToken) {
   return id;
 }
 
-async function getLatestTweetsByUserId(userId, bearerToken, { maxResults = 10 } = {}) {
+/**
+ * ユーザーの最新ツイートを取得
+ *
+ * @param {string} userId
+ * @param {string} bearerToken
+ * @param {object} opts
+ * @param {number} [opts.maxResults=10] 返ってくる件数（=読み取り数）を抑えるため小さくする
+ * @param {string|null} [opts.sinceId=null] これより新しいものだけ（差分取得）
+ * @param {boolean} [opts.excludeReplies=true] 返信を除外するか
+ */
+async function getLatestTweetsByUserId(
+  userId,
+  bearerToken,
+  { maxResults = 10, sinceId = null, excludeReplies = true } = {},
+) {
   // created_at と text だけで十分
+  const clamped = Math.max(5, Math.min(100, Number(maxResults) || 10));
+  const exclude = excludeReplies ? 'replies,retweets' : 'retweets';
+
   const params = new URLSearchParams({
     'tweet.fields': 'created_at,text',
-    exclude: 'replies,retweets',
-    max_results: String(Math.max(5, Math.min(100, maxResults))),
+    exclude,
+    max_results: String(clamped),
   });
+
+  if (sinceId) {
+    params.set('since_id', String(sinceId));
+  }
+
   const url = `https://api.x.com/2/users/${encodeURIComponent(userId)}/tweets?${params.toString()}`;
   const data = await xFetchJson(url, bearerToken);
   return data?.data || [];

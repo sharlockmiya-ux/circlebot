@@ -4,7 +4,13 @@
 const { EmbedBuilder } = require('discord.js');
 
 const { getXGoodsNotifierConfig } = require('./config');
-const { getState, setLastNotified, setUserIdCache } = require('./stateStore');
+const {
+  getState,
+  setLastNotified,
+  setUserIdCache,
+  setLastSeenTweetId,
+  setLastCheckedJstYmd,
+} = require('./stateStore');
 const { isTargetTweetText } = require('./matcher');
 const { formatJstYmd, formatJstHm, getJstHour } = require('./time');
 const { getUserIdByUsername, getLatestTweetsByUserId } = require('./xApi');
@@ -24,6 +30,26 @@ function safeLogError(prefix, err) {
 
 function buildTweetUrl(username, tweetId) {
   return `https://x.com/${username}/status/${tweetId}`;
+}
+
+function maxTweetId(tweets) {
+  let best = null;
+  for (const t of tweets || []) {
+    const id = t?.id;
+    if (!id) continue;
+    if (!best) {
+      best = String(id);
+      continue;
+    }
+    // tweet id は 64bit を超える可能性があるので BigInt 比較
+    try {
+      if (BigInt(String(id)) > BigInt(best)) best = String(id);
+    } catch {
+      // BigInt 変換に失敗したら単純比較（フォールバック）
+      if (String(id) > best) best = String(id);
+    }
+  }
+  return best;
 }
 
 function pickCandidateTweet(tweets, cfg) {
@@ -71,18 +97,58 @@ async function runXGoodsNotifier(client, { force = false, reason = 'cron' } = {}
     return { ok: false, skipped: true, why: 'missing_x_bearer_token' };
   }
 
+  // 同日に何度も cron が走ると“読み取り”が増えるので、同日チェックは抑制（force は除外）
+  const today = formatJstYmd(new Date());
+  if (!force && reason === 'cron' && state.lastCheckedJstYmd === today) {
+    return { ok: true, skipped: true, why: 'already_checked_today' };
+  }
+
   const username = cfg.username;
   let userId = state.userIdCache;
+
+  // 読み取り最小化：
+  // - cron は「since_id + 少数(max_results)」
+  // - 手動テストは少し広く読む（ただし必要時のみユーザーが実行）
+  const isManual = String(reason || '').includes('manual');
+  const fetchOpts = isManual
+    ? {
+        maxResults: cfg.testMaxResults,
+        sinceId: null,
+        excludeReplies: cfg.excludeReplies,
+      }
+    : {
+        maxResults: cfg.cronMaxResults,
+        sinceId: state.lastSeenTweetId || state.lastNotifiedTweetId || null,
+        excludeReplies: cfg.excludeReplies,
+      };
+
   try {
     if (!userId) {
       userId = await getUserIdByUsername(username, token);
       setUserIdCache(userId);
     }
 
-    const tweets = await getLatestTweetsByUserId(userId, token, { maxResults: 10 });
+    const tweets = await getLatestTweetsByUserId(userId, token, fetchOpts);
+
+    // 今回見えた最新IDを保存（これにより次回は差分取得できる）
+    const newestId = maxTweetId(tweets);
+    if (newestId) setLastSeenTweetId(newestId);
+
+    // cron は「今日チェックした」事実だけ残す（force/manual は除外）
+    if (!force && reason === 'cron') {
+      setLastCheckedJstYmd(today);
+    }
+
     const cand = pickCandidateTweet(tweets, cfg);
     if (!cand) {
-      return { ok: true, skipped: true, why: 'no_candidate' };
+      return {
+        ok: true,
+        skipped: true,
+        why: 'no_candidate',
+        fetched: Array.isArray(tweets) ? tweets.length : 0,
+        sinceId: fetchOpts.sinceId || null,
+        maxResults: fetchOpts.maxResults,
+      };
     }
 
     const tweetId = cand.tweet.id;
@@ -96,7 +162,6 @@ async function runXGoodsNotifier(client, { force = false, reason = 'cron' } = {}
     }
 
     // 同日内の再送も基本は避ける（force の時は許可）
-    const today = formatJstYmd(new Date());
     if (!force && state.lastNotifiedJstYmd === today) {
       return { ok: true, skipped: true, why: 'already_notified_today', tweetId };
     }

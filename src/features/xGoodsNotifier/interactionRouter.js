@@ -4,9 +4,8 @@
 const { PermissionFlagsBits } = require('discord.js');
 
 const { getXGoodsNotifierConfig } = require('./config');
-const { getState, setEnabled } = require('./stateStore');
+const { getState, setEnabled, STATE_PATH } = require('./stateStore');
 const { runXGoodsNotifier } = require('./notifier');
-const { STATE_PATH } = require('./stateStore');
 
 function hasManageGuild(interaction) {
   try {
@@ -25,8 +24,16 @@ function formatStatus() {
     enabled,
     channelId: cfg.channelId,
     username: cfg.username,
+    cronMaxResults: cfg.cronMaxResults,
+    testMaxResults: cfg.testMaxResults,
+    excludeReplies: cfg.excludeReplies,
+
     lastNotifiedTweetId: st.lastNotifiedTweetId,
     lastNotifiedJstYmd: st.lastNotifiedJstYmd,
+
+    lastSeenTweetId: st.lastSeenTweetId,
+    lastCheckedJstYmd: st.lastCheckedJstYmd,
+
     statePath: STATE_PATH,
   };
 }
@@ -46,7 +53,11 @@ async function handleXGoodsSlash(interaction) {
         `- enabled: **${st.enabled ? 'ON' : 'OFF'}**\n` +
         `- username: @${st.username}\n` +
         `- channelId: ${st.channelId || '(unset)'}\n` +
-        `- last: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
+        `- readBudget(cron/test): ${st.cronMaxResults} / ${st.testMaxResults}\n` +
+        `- excludeReplies: ${st.excludeReplies ? 'true' : 'false'}\n` +
+        `- lastNotified: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
+        `- lastSeen: ${st.lastSeenTweetId || '-'}\n` +
+        `- lastChecked: ${st.lastCheckedJstYmd || '-'}\n` +
         `- state: ${st.statePath}`,
       allowedMentions: { parse: [] },
     });
@@ -89,7 +100,16 @@ async function handleXGoodsSlash(interaction) {
     if (result?.notified) {
       await interaction.editReply(`✅ テスト通知しました: ${result.tweetUrl}`);
     } else {
-      await interaction.editReply(`ℹ️ テスト結果: ${JSON.stringify(result)}`);
+      // no_candidate のときは「読み取り最小化の都合で“直近のみ”読んでいる」可能性があるので補足
+      if (result?.why === 'no_candidate') {
+        await interaction.editReply(
+          `ℹ️ テスト結果: ${JSON.stringify(result)}\n` +
+            `※読み取り最小化のため、手動テストでも読み取り件数を制限しています。` +
+            ` 朝6:35の自動実行で拾えることを優先しています。`,
+        );
+      } else {
+        await interaction.editReply(`ℹ️ テスト結果: ${JSON.stringify(result)}`);
+      }
     }
     return;
   }

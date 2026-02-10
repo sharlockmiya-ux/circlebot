@@ -5,16 +5,19 @@
     "enabled": true,
     "channelId": "1470635185442914399",
     "username": "zutapoke",
-    "keywordsAll": ["【業務連絡】", "締切"],
-    "keywordsAny": ["グッズ", "予約", "受注", "販売"],
+    "keywordsAll": [],
+    "keywordsAny": [],
     "minHourJst": 5,
-    "maxHourJst": 9
+    "maxHourJst": 9,
+    "cronMaxResults": 5,
+    "testMaxResults": 25,
+    "excludeReplies": true
   },
   "channels": {
-    "log": "1431975383242113066",  
+    "log": "1431975383242113066",
     "rolepanel": "1433797341642489936",
     "announce": "",
-    "motiNotice":"1431902622318596167",
+    "motiNotice": "1431902622318596167",
     "vcTextNotify": "",
     "rulesSummary": "1431904100081205268",
     "inquiry": "1433797414598479922",
@@ -112,9 +115,9 @@
         "customId": "role_amayo"
       },
       {
-         "label": "賀陽燐羽",
-         "roleId": "1433703793140170753",
-         "customId": "role_kayo_rinba"
+        "label": "賀陽燐羽",
+        "roleId": "1433703793140170753",
+        "customId": "role_kayo_rinba"
       }
     ]
   },
