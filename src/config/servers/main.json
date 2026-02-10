@@ -8,14 +8,9 @@
     "keywordsAll": [
       "業務連絡"
     ],
-    "keywordsAny": [
-      "グッズ",
-      "予約",
-      "受注",
-      "販売"
-    ],
+    "keywordsAny": [],
     "minHourJst": 6,
-    "maxHourJst": 7,
+    "maxHourJst": 8,
     "maxResults": 5
   },
   "channels": {

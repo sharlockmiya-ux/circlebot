@@ -16,8 +16,6 @@ function hasManageGuild(interaction) {
   }
 }
 
-
-
 const EPHEMERAL = { flags: MessageFlags.Ephemeral };
 
 function stripEphemeral(payload) {
@@ -45,8 +43,27 @@ async function replyEphemeral(interaction, payload) {
 }
 
 async function ensureDeferred(interaction) {
-  if (interaction.deferred || interaction.replied) return;
-  await interaction.deferReply({ ...EPHEMERAL });
+  if (interaction.deferred || interaction.replied) return true;
+  try {
+    await interaction.deferReply({ ...EPHEMERAL });
+    return true;
+  } catch (e) {
+    // 10062: interaction が失効している
+    if (e?.code === 10062) return false;
+    throw e;
+  }
+}
+
+function summarizeLastFetch(result) {
+  if (!result) return '-';
+  const parts = [];
+  if (result.ok === false) parts.push('ok:false');
+  if (result.notified) parts.push('notified');
+  if (result.skipped) parts.push('skipped');
+  if (result.why) parts.push(`why:${result.why}`);
+  if (result.cached) parts.push('cached');
+  if (result.tweetId) parts.push(`tweetId:${result.tweetId}`);
+  return parts.join(' / ') || JSON.stringify(result);
 }
 
 function formatStatus() {
@@ -60,6 +77,9 @@ function formatStatus() {
     username: cfg.username,
     lastNotifiedTweetId: st.lastNotifiedTweetId,
     lastNotifiedJstYmd: st.lastNotifiedJstYmd,
+    lastFetchAtIso: st.lastFetchAtIso,
+    lastFetchJstYmd: st.lastFetchJstYmd,
+    lastFetchSummary: summarizeLastFetch(st.lastFetchResult),
     statePath: STATE_PATH,
   };
 }
@@ -78,7 +98,9 @@ async function handleXGoodsSlash(interaction) {
         `- enabled: **${st.enabled ? 'ON' : 'OFF'}**\n` +
         `- username: @${st.username}\n` +
         `- channelId: ${st.channelId || '(unset)'}\n` +
-        `- last: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
+        `- lastNotified: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
+        `- lastFetch: ${st.lastFetchAtIso || '-'} (${st.lastFetchJstYmd || '-'})\n` +
+        `  - ${st.lastFetchSummary}\n` +
         `- state: ${st.statePath}`,
       allowedMentions: { parse: [] },
     });
@@ -113,7 +135,9 @@ async function handleXGoodsSlash(interaction) {
   }
 
   if (sub === 'test') {
-    await ensureDeferred(interaction);
+    const ok = await ensureDeferred(interaction);
+    if (!ok) return; // 失効しているので何もしない
+
     const result = await runXGoodsNotifier(interaction.client, { force: false, reason: 'manual_test' });
     if (result?.notified) {
       await interaction.editReply(`✅ テスト通知しました: ${result.tweetUrl}`);
@@ -124,9 +148,9 @@ async function handleXGoodsSlash(interaction) {
   }
 }
 
-async function handleXGoodsInteraction(interaction, ctx) {
+async function handleXGoodsInteraction(interaction) {
   // 今はスラッシュのみ
-  await handleXGoodsSlash(interaction, ctx);
+  await handleXGoodsSlash(interaction);
 }
 
 module.exports = { handleXGoodsInteraction };

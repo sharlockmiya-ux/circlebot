@@ -16,6 +16,7 @@ function setupXGoodsNotifier(client) {
   cron.schedule(
     '35 6 * * *',
     async () => {
+      console.log('[xGoodsNotifier] cron tick');
       await runXGoodsNotifier(client, { reason: 'cron' });
     },
     { timezone: 'Asia/Tokyo' },

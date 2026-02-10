@@ -30,24 +30,26 @@ function getXGoodsNotifierConfig() {
     'zutapoke';
 
   // マッチ条件（調整用）
+  // v10: B案（"業務連絡" を核にする）
   const keywordsAll =
     parseCsvMaybe(process.env.X_GOODS_NOTIFIER_KEYWORDS_ALL) ||
     section.keywordsAll ||
-    ['【業務連絡】', '締切'];
+    ['業務連絡'];
 
+  // v10: keywordsAny は基本空（必要なら env/main.json で追加）
   const keywordsAny =
     parseCsvMaybe(process.env.X_GOODS_NOTIFIER_KEYWORDS_ANY) ||
     section.keywordsAny ||
-    ['グッズ', '予約', '受注', '販売'];
+    [];
 
-  // 投稿時刻の想定（JST）: 6:30頃
+  // 投稿時刻の想定（JST）: 6:30頃（多少ズレても拾えるよう上側を少し広げる）
   const minHourJst =
     Number(process.env.X_GOODS_NOTIFIER_MIN_HOUR_JST ?? section.minHourJst ?? 6);
   const maxHourJst =
-    Number(process.env.X_GOODS_NOTIFIER_MAX_HOUR_JST ?? section.maxHourJst ?? 7);
+    Number(process.env.X_GOODS_NOTIFIER_MAX_HOUR_JST ?? section.maxHourJst ?? 8);
 
+  // X API 読取最小化: 1回の取得件数（最低5 / 最大100）
   const maxResults = Number(process.env.X_GOODS_NOTIFIER_MAX_RESULTS ?? section.maxResults ?? 5);
-
 
   return {
     enabledDefault,
