@@ -135,7 +135,6 @@ if (!force && state.lastFetchAtIso && state.lastFetchJstYmd === today && state.l
     }
 
     // 同日内の再送も基本は避ける（force の時は許可）
-    const today = formatJstYmd(new Date());
     if (!force && state.lastNotifiedJstYmd === today) {
       return { ok: true, skipped: true, why: 'already_notified_today', tweetId };
     }
