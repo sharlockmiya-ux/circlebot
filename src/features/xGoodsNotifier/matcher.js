@@ -1,10 +1,8 @@
 // src/features/xGoodsNotifier/matcher.js
 // 「本日締切グッズまとめ」っぽい投稿だけを拾うための判定
 //
-// NOTE:
-// - ユーザー要件（6:30の対象ツイートには毎回「業務連絡」が入る）を踏まえ、
-//   過剰な条件（締切ワード必須など）で取り逃さないようにする。
-// - 判定は config の keywordsAll/keywordsAny で調整可能。
+// v11: 課金(読み取り)を増やさないため、判定はテキスト条件のみに寄せる。
+//      「業務連絡」固定運用（B案）では keywordsAll=['業務連絡'] のみで十分。
 
 function normalizeText(s) {
   return String(s || '')
@@ -19,10 +17,10 @@ function includesAll(text, words) {
 
 function includesAny(text, words) {
   if (!words || words.length === 0) return true;
-  return (words || []).some((w) => w && text.includes(w));
+  return words.some((w) => w && text.includes(w));
 }
 
-function isTargetTweetText(text, { keywordsAll, keywordsAny } = {}) {
+function isTargetTweetText(text, { keywordsAll, keywordsAny }) {
   const t = normalizeText(text);
   if (!t) return false;
 
@@ -32,6 +30,4 @@ function isTargetTweetText(text, { keywordsAll, keywordsAny } = {}) {
   return true;
 }
 
-module.exports = {
-  isTargetTweetText,
-};
+module.exports = { isTargetTweetText };

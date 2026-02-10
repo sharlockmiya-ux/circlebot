@@ -1,53 +1,64 @@
 // src/features/xGoodsNotifier/notifier.js
-// X(旧Twitter) の投稿を取得して Discord に通知
+// X の「本日締切グッズまとめ」投稿を検出して Discord へ通知（読取最小化）
+
+const { EmbedBuilder } = require('discord.js');
 
 const { getXGoodsNotifierConfig } = require('./config');
+const { getState, setLastNotified, setUserIdCache, setLastFetch } = require('./stateStore');
 const { isTargetTweetText } = require('./matcher');
-const {
-  getState,
-  setLastNotified,
-  setLastNotifiedYmd,
-  setLastFetchAt,
-  setLastFetchYmd,
-  setLastFetchResult,
-} = require('./stateStore');
-const { getLatestTweetsByUserId } = require('./xApi');
-const { formatJstYmd, formatJstHm, jstDateTimeToUtcIso } = require('./time');
+const { formatJstYmd, formatJstHm, getJstHour, jstDateTimeToUtcIso } = require('./time');
+const { getUserIdByUsername, getLatestTweetsByUserId } = require('./xApi');
+
+function safeLogError(prefix, err) {
+  const info = {
+    message: err?.message,
+    code: err?.code,
+    status: err?.status,
+  };
+  if (err?.data) {
+    info.data = typeof err.data === 'string' ? err.data.slice(0, 200) : err.data;
+  }
+  console.error(prefix, info);
+}
+
+function buildTweetUrl(username, tweetId) {
+  return `https://x.com/${username}/status/${tweetId}`;
+}
 
 function pickCandidateTweet(tweets, cfg, todayJstYmd) {
-  if (!Array.isArray(tweets) || tweets.length === 0) return null;
+  for (const t of tweets || []) {
+    const created = t?.created_at ? new Date(t.created_at) : null;
+    if (!created) continue;
 
-  for (const t of tweets) {
-    if (!t || !t.text || !t.created_at) continue;
-
-    // テキスト判定
-    if (!isTargetTweetText(t.text, cfg)) continue;
-
-    // JST の「日付」が今日か
-    const created = new Date(t.created_at);
+    // JST日付が「今日」
     const ymd = formatJstYmd(created);
     if (ymd !== todayJstYmd) continue;
 
-    return t;
-  }
+    // JST時刻がウィンドウ内
+    const hour = getJstHour(created);
+    if (Number.isFinite(cfg.minHourJst) && hour < cfg.minHourJst) continue;
+    if (Number.isFinite(cfg.maxHourJst) && hour > cfg.maxHourJst) continue;
 
+    // テキスト条件
+    if (!isTargetTweetText(t.text, cfg)) continue;
+
+    return {
+      tweet: t,
+      jstYmd: ymd,
+      jstHm: formatJstHm(created),
+    };
+  }
   return null;
 }
 
-async function sendDiscordNotification(client, channelId, message) {
-  if (!channelId) throw new Error('channelId is not set');
-  const channel = await client.channels.fetch(channelId);
-  if (!channel || !channel.isTextBased()) throw new Error('channel not found or not text-based');
-  await channel.send({ content: message, allowedMentions: { parse: [] } });
-}
-
-async function runXGoodsNotifier(client, { force = false, reason = 'unknown' } = {}) {
-  const cfg = getXGoodsNotifierConfig();
-  const st = getState();
-
-  const enabled = st.enabled === null ? cfg.enabledDefault : !!st.enabled;
+async function runXGoodsNotifier(client, { force = false, reason = 'cron' } = {}) {
+  // TDZ 回避のため先に初期化
   const todayJstYmd = formatJstYmd(new Date());
 
+  const cfg = getXGoodsNotifierConfig();
+  const state = getState();
+
+  const enabled = state.enabled === null ? cfg.enabledDefault : !!state.enabled;
   const meta = {
     reason,
     force,
@@ -56,98 +67,141 @@ async function runXGoodsNotifier(client, { force = false, reason = 'unknown' } =
     maxResults: cfg.maxResults,
   };
 
-  // ここでログを出しておくと「cron が動いてるのにログが無い」状態を避けられる
+  // 「cronが動いてるのにログが無い」対策
   console.log('[xGoodsNotifier] run start', meta);
 
-  if (!enabled) {
-    const res = { ok: true, skipped: true, why: 'disabled' };
-    setLastFetchAt(new Date().toISOString());
-    setLastFetchYmd(todayJstYmd);
-    setLastFetchResult({ ...res, ...meta });
-    console.log('[xGoodsNotifier] skipped (disabled)', meta);
-    return res;
-  }
-
-  if (!force && st.lastNotifiedJstYmd === todayJstYmd) {
-    const res = { ok: true, skipped: true, why: 'already_notified_today_no_fetch' };
-    setLastFetchAt(new Date().toISOString());
-    setLastFetchYmd(todayJstYmd);
-    setLastFetchResult({ ...res, ...meta });
-    console.log('[xGoodsNotifier] skipped (already notified today)', meta);
-    return res;
-  }
-
-  // X API 読み取りを最小化するため、1回の呼び出しで完結させる
-  const startTimeIso = jstDateTimeToUtcIso(todayJstYmd, cfg.minHourJst, 0, 0);
-  const endTimeIso = jstDateTimeToUtcIso(todayJstYmd, cfg.maxHourJst + 1, 0, 0);
-
   try {
-    const tweets = await getLatestTweetsByUserId(cfg.userId, {
-      bearerToken: cfg.bearerToken,
-      maxResults: cfg.maxResults,
-      startTimeIso,
-      endTimeIso,
-    });
+    if (!enabled && !force) {
+      const res = { ok: true, skipped: true, why: 'disabled', ...meta };
+      setLastFetch(todayJstYmd, res);
+      return res;
+    }
 
-    console.log('[xGoodsNotifier] fetched tweets', {
-      ...meta,
-      count: Array.isArray(tweets) ? tweets.length : 0,
-      startTimeIso,
-      endTimeIso,
-    });
+    if (!cfg.channelId) {
+      const res = { ok: false, skipped: true, why: 'missing_channel_id', ...meta };
+      setLastFetch(todayJstYmd, res);
+      return res;
+    }
 
-    setLastFetchAt(new Date().toISOString());
-    setLastFetchYmd(todayJstYmd);
+    const token = process.env.X_BEARER_TOKEN || process.env.X_BEARER || process.env.TWITTER_BEARER_TOKEN;
+    if (!token) {
+      const res = { ok: false, skipped: true, why: 'missing_x_bearer_token', ...meta };
+      setLastFetch(todayJstYmd, res);
+      return res;
+    }
 
-    const candidate = pickCandidateTweet(tweets, cfg, todayJstYmd);
-
-    if (!candidate) {
+    // すでに今日通知済みなら、読みに行かず終了（forceなら読む）
+    if (!force && state.lastNotifiedJstYmd === todayJstYmd) {
       const res = {
         ok: true,
         skipped: true,
-        why: 'no_candidate',
-        fetched: Array.isArray(tweets) ? tweets.length : 0,
+        why: 'already_notified_today_no_fetch',
+        tweetId: state.lastNotifiedTweetId || null,
+        ...meta,
       };
-      setLastFetchResult({ ...res, ...meta });
-      console.log('[xGoodsNotifier] no candidate', { ...meta, fetched: res.fetched });
+      setLastFetch(todayJstYmd, res);
+      console.log('[xGoodsNotifier] skipped (already notified today)', meta);
       return res;
     }
 
-    const tweetId = candidate.id;
-    const tweetUrl = `https://x.com/${cfg.username}/status/${tweetId}`;
+    // 連打対策：直近結果があれば 2分はキャッシュで返す（読取最小化）
+    const ttlMs = 2 * 60 * 1000;
+    if (!force && state.lastFetchAtIso && state.lastFetchJstYmd === todayJstYmd && state.lastFetchResult) {
+      const age = Date.now() - Date.parse(state.lastFetchAtIso);
+      if (Number.isFinite(age) && age >= 0 && age < ttlMs) {
+        const res = { ...state.lastFetchResult, cached: true };
+        console.log('[xGoodsNotifier] return cached result', { ...meta, ageMs: age });
+        return res;
+      }
+    }
 
-    // 二重投稿抑止
-    if (!force && st.lastNotifiedTweetId === tweetId) {
-      const res = { ok: true, skipped: true, why: 'already_notified_same_tweet', tweetId, tweetUrl };
-      setLastFetchResult({ ...res, ...meta });
-      console.log('[xGoodsNotifier] skipped (already notified same tweet)', { ...meta, tweetId });
+    // userId を 1回だけ引いてキャッシュ
+    const username = cfg.username;
+    let userId = state.userIdCache;
+    if (!userId) {
+      userId = await getUserIdByUsername(username, token);
+      setUserIdCache(userId);
+      console.log('[xGoodsNotifier] resolved userId', { ...meta, userId });
+    }
+
+    // ===== X API 読取最小化 =====
+    // JST 06:00〜08:59 のみ（6:30投稿 + 遅延も吸収）
+    const minHour = Number.isFinite(cfg.minHourJst) ? cfg.minHourJst : 6;
+    const maxHour = Number.isFinite(cfg.maxHourJst) ? cfg.maxHourJst : 8;
+
+    const startTimeIso = jstDateTimeToUtcIso(todayJstYmd, minHour, 0, 0);
+    const endTimeIso = jstDateTimeToUtcIso(todayJstYmd, maxHour + 1, 0, 0); // end_time は未満
+
+    const maxResults = Number.isFinite(cfg.maxResults) ? cfg.maxResults : 5;
+    const sinceId = !force && state.lastNotifiedTweetId ? String(state.lastNotifiedTweetId) : null;
+
+    console.log('[xGoodsNotifier] fetching tweets', { ...meta, startTimeIso, endTimeIso, sinceId });
+
+    const tweets = await getLatestTweetsByUserId(userId, token, {
+      maxResults,
+      startTimeIso,
+      endTimeIso,
+      sinceId,
+      exclude: 'retweets',
+    });
+
+    console.log('[xGoodsNotifier] fetched tweets', { ...meta, count: Array.isArray(tweets) ? tweets.length : 0 });
+
+    const cand = pickCandidateTweet(tweets, cfg, todayJstYmd);
+    if (!cand) {
+      const res = { ok: true, skipped: true, why: 'no_candidate', fetched: tweets?.length || 0, ...meta };
+      setLastFetch(todayJstYmd, res);
+      console.log('[xGoodsNotifier] no candidate', res);
       return res;
     }
 
-    const message = `📌 **本日締め切りグッズまとめ（${formatJstHm(new Date())} JST）**\n${tweetUrl}`;
+    const tweetId = cand.tweet.id;
+    if (!tweetId) {
+      const res = { ok: true, skipped: true, why: 'candidate_missing_id', ...meta };
+      setLastFetch(todayJstYmd, res);
+      return res;
+    }
 
-    await sendDiscordNotification(client, cfg.channelId, message);
+    // 同じIDを二重通知しない
+    if (state.lastNotifiedTweetId === String(tweetId)) {
+      const res = { ok: true, skipped: true, why: 'already_notified_same_tweet', tweetId, ...meta };
+      setLastFetch(todayJstYmd, res);
+      return res;
+    }
 
-    setLastNotified(tweetId);
-    setLastNotifiedYmd(todayJstYmd);
+    const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+      const res = { ok: false, skipped: true, why: 'channel_not_found', ...meta };
+      setLastFetch(todayJstYmd, res);
+      return res;
+    }
 
-    const res = { ok: true, notified: true, tweetId, tweetUrl };
-    setLastFetchResult({ ...res, ...meta });
+    const tweetUrl = buildTweetUrl(username, tweetId);
 
-    console.log('[xGoodsNotifier] notified', { ...meta, tweetId, tweetUrl });
+    const embed = new EmbedBuilder()
+      .setTitle(`本日締切グッズまとめ（${cand.jstYmd} ${cand.jstHm}頃）`)
+      .setURL(tweetUrl)
+      .setDescription(String(cand.tweet.text || '').slice(0, 3900))
+      .setFooter({ text: `source: @${username} / ${reason}` });
+
+    await channel.send({
+      content: `📦 **本日締切グッズまとめ**\n${tweetUrl}`,
+      embeds: [embed],
+      allowedMentions: { parse: [] },
+    });
+
+    setLastNotified(tweetId, cand.jstYmd);
+
+    const res = { ok: true, notified: true, tweetId: String(tweetId), tweetUrl, ...meta };
+    setLastFetch(todayJstYmd, res);
+
+    console.log('[xGoodsNotifier] notified', res);
     return res;
   } catch (e) {
-    const res = {
-      ok: false,
-      error: true,
-      message: e?.message || String(e),
-      code: e?.code,
-      status: e?.status,
-    };
-    setLastFetchAt(new Date().toISOString());
-    setLastFetchYmd(todayJstYmd);
-    setLastFetchResult({ ...res, ...meta });
-    console.log('[xGoodsNotifier] run error', res);
+    safeLogError('[xGoodsNotifier] run error:', e);
+    const res = { ok: false, error: true, message: e?.message, ...meta };
+    // ここで stateStore が落ちても notifier は落とさない
+    try { setLastFetch(todayJstYmd, res); } catch {}
     return res;
   }
 }

@@ -3,6 +3,9 @@
 // ※Render では永続ではない可能性があるため、
 //   - その場合でも「同一プロセス内の重複通知」を防ぐ
 //   - 再起動後に同日もう一度通知される可能性はゼロにはできない（許容）
+//
+// v11: notifier.js / interactionRouter.js が期待する関数群を統一し、
+//      旧パッチ互換（setLastFetchAt 等）も残してクラッシュを防ぐ。
 
 const fs = require('fs');
 const path = require('path');
@@ -66,11 +69,23 @@ function setEnabled(enabled) {
   return setState({ enabled: !!enabled });
 }
 
+// 旧: setLastNotified(tweetId, jstYmd)
+// v10 互換: setLastNotified(tweetId) + setLastNotifiedYmd(ymd)
 function setLastNotified(tweetId, jstYmd) {
-  return setState({ lastNotifiedTweetId: String(tweetId), lastNotifiedJstYmd: String(jstYmd) });
+  const patch = { lastNotifiedTweetId: tweetId == null ? null : String(tweetId) };
+  if (jstYmd != null) patch.lastNotifiedJstYmd = String(jstYmd);
+  return setState(patch);
 }
 
+function setLastNotifiedYmd(jstYmd) {
+  return setState({ lastNotifiedJstYmd: jstYmd == null ? null : String(jstYmd) });
+}
 
+function setUserIdCache(userId) {
+  return setState({ userIdCache: userId == null ? null : String(userId) });
+}
+
+// v11: 1回でまとめて保存する推奨API
 function setLastFetch(jstYmd, result) {
   try {
     return setState({
@@ -79,13 +94,33 @@ function setLastFetch(jstYmd, result) {
       lastFetchResult: result ?? null,
     });
   } catch {
-    // noop
     return null;
   }
 }
 
-function setUserIdCache(userId) {
-  return setState({ userIdCache: String(userId) });
+// v10互換: notifier が setLastFetchAt/setLastFetchYmd/setLastFetchResult を個別に呼ぶ
+function setLastFetchAt(iso) {
+  try {
+    return setState({ lastFetchAtIso: iso ? String(iso) : new Date().toISOString() });
+  } catch {
+    return null;
+  }
+}
+
+function setLastFetchYmd(jstYmd) {
+  try {
+    return setState({ lastFetchJstYmd: jstYmd ? String(jstYmd) : null });
+  } catch {
+    return null;
+  }
+}
+
+function setLastFetchResult(result) {
+  try {
+    return setState({ lastFetchResult: result ?? null });
+  } catch {
+    return null;
+  }
 }
 
 module.exports = {
@@ -93,7 +128,11 @@ module.exports = {
   setState,
   setEnabled,
   setLastNotified,
+  setLastNotifiedYmd,
   setUserIdCache,
   setLastFetch,
+  setLastFetchAt,
+  setLastFetchYmd,
+  setLastFetchResult,
   STATE_PATH,
 };

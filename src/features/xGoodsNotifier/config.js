@@ -29,14 +29,13 @@ function getXGoodsNotifierConfig() {
     section.username ||
     'zutapoke';
 
-  // マッチ条件（調整用）
-  // v10: B案（"業務連絡" を核にする）
+  // マッチ条件（B案: "業務連絡" を核にする）
   const keywordsAll =
     parseCsvMaybe(process.env.X_GOODS_NOTIFIER_KEYWORDS_ALL) ||
     section.keywordsAll ||
     ['業務連絡'];
 
-  // v10: keywordsAny は基本空（必要なら env/main.json で追加）
+  // keywordsAny は基本空（必要なら env/main.json で追加）
   const keywordsAny =
     parseCsvMaybe(process.env.X_GOODS_NOTIFIER_KEYWORDS_ANY) ||
     section.keywordsAny ||

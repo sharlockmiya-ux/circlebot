@@ -4,9 +4,10 @@
 const { PermissionFlagsBits, MessageFlags } = require('discord.js');
 
 const { getXGoodsNotifierConfig } = require('./config');
-const { getState, setEnabled } = require('./stateStore');
+const { getState, setEnabled, STATE_PATH } = require('./stateStore');
 const { runXGoodsNotifier } = require('./notifier');
-const { STATE_PATH } = require('./stateStore');
+
+const EPHEMERAL = { flags: MessageFlags.Ephemeral };
 
 function hasManageGuild(interaction) {
   try {
@@ -16,54 +17,40 @@ function hasManageGuild(interaction) {
   }
 }
 
-const EPHEMERAL = { flags: MessageFlags.Ephemeral };
-
 function stripEphemeral(payload) {
   if (!payload || typeof payload !== 'object') return payload;
   const { flags, ephemeral, ...rest } = payload;
   return rest;
 }
 
-async function replyEphemeral(interaction, payload) {
-  const base = {
-    allowedMentions: { parse: [] },
-    ...payload,
-  };
-
-  if (interaction.deferred || interaction.replied) {
-    // 既にACK済みなら defer/reply を重ねない（40060 回避）
+async function safeEditOrFollowUp(interaction, payload) {
+  try {
+    if (interaction.deferred || interaction.replied) {
+      return await interaction.editReply(stripEphemeral(payload));
+    }
+    return await interaction.reply({ ...payload, ...EPHEMERAL });
+  } catch (e) {
+    // 10062 (Unknown interaction) などは、ユーザー側には「考え中」で残らないよう握り潰す
+    const code = e?.code;
+    if (code === 10062) return;
     try {
-      return await interaction.editReply(stripEphemeral(base));
+      return await interaction.followUp({ ...payload, ...EPHEMERAL });
     } catch {
-      return await interaction.followUp({ ...base, ...EPHEMERAL });
+      return;
     }
   }
-
-  return await interaction.reply({ ...base, ...EPHEMERAL });
 }
 
 async function ensureDeferred(interaction) {
-  if (interaction.deferred || interaction.replied) return true;
+  if (interaction.deferred || interaction.replied) return;
   try {
     await interaction.deferReply({ ...EPHEMERAL });
-    return true;
   } catch (e) {
-    // 10062: interaction が失効している
-    if (e?.code === 10062) return false;
+    // 10062 等はここで出ることがある
+    const code = e?.code;
+    if (code === 10062) return;
     throw e;
   }
-}
-
-function summarizeLastFetch(result) {
-  if (!result) return '-';
-  const parts = [];
-  if (result.ok === false) parts.push('ok:false');
-  if (result.notified) parts.push('notified');
-  if (result.skipped) parts.push('skipped');
-  if (result.why) parts.push(`why:${result.why}`);
-  if (result.cached) parts.push('cached');
-  if (result.tweetId) parts.push(`tweetId:${result.tweetId}`);
-  return parts.join(' / ') || JSON.stringify(result);
 }
 
 function formatStatus() {
@@ -79,9 +66,14 @@ function formatStatus() {
     lastNotifiedJstYmd: st.lastNotifiedJstYmd,
     lastFetchAtIso: st.lastFetchAtIso,
     lastFetchJstYmd: st.lastFetchJstYmd,
-    lastFetchSummary: summarizeLastFetch(st.lastFetchResult),
+    lastFetchResult: st.lastFetchResult,
     statePath: STATE_PATH,
   };
+}
+
+function who(interaction) {
+  const u = interaction.user;
+  return u ? `${u.username}(${u.id})` : 'unknown';
 }
 
 async function handleXGoodsSlash(interaction) {
@@ -89,18 +81,20 @@ async function handleXGoodsSlash(interaction) {
   if (interaction.commandName !== 'xgoods') return;
 
   const sub = interaction.options.getSubcommand();
-  const st = formatStatus();
+
+  // Render 側で「コマンドが呼ばれたか」を確認できるようにログ
+  console.log(`[Slash] /xgoods ${sub} from ${who(interaction)}`);
 
   if (sub === 'status') {
-    await replyEphemeral(interaction, {
+    const st = formatStatus();
+    await safeEditOrFollowUp(interaction, {
       content:
         `**xGoods notifier**\n` +
         `- enabled: **${st.enabled ? 'ON' : 'OFF'}**\n` +
         `- username: @${st.username}\n` +
         `- channelId: ${st.channelId || '(unset)'}\n` +
         `- lastNotified: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
-        `- lastFetch: ${st.lastFetchAtIso || '-'} (${st.lastFetchJstYmd || '-'})\n` +
-        `  - ${st.lastFetchSummary}\n` +
+        `- lastFetch: ${st.lastFetchJstYmd || '-'} / ${st.lastFetchAtIso || '-'}\n` +
         `- state: ${st.statePath}`,
       allowedMentions: { parse: [] },
     });
@@ -109,8 +103,9 @@ async function handleXGoodsSlash(interaction) {
 
   // ここから先は運営向け
   if (!hasManageGuild(interaction)) {
-    await replyEphemeral(interaction, {
+    await safeEditOrFollowUp(interaction, {
       content: 'この操作には Manage Server 権限が必要です。',
+      allowedMentions: { parse: [] },
     });
     return;
   }
@@ -118,7 +113,7 @@ async function handleXGoodsSlash(interaction) {
   if (sub === 'on') {
     setEnabled(true);
     const after = formatStatus();
-    await replyEphemeral(interaction, {
+    await safeEditOrFollowUp(interaction, {
       content: `✅ xGoods notifier を **ON** にしました（channel: ${after.channelId || '(unset)'}）`,
       allowedMentions: { parse: [] },
     });
@@ -127,7 +122,7 @@ async function handleXGoodsSlash(interaction) {
 
   if (sub === 'off') {
     setEnabled(false);
-    await replyEphemeral(interaction, {
+    await safeEditOrFollowUp(interaction, {
       content: '🛑 xGoods notifier を **OFF** にしました。',
       allowedMentions: { parse: [] },
     });
@@ -135,21 +130,33 @@ async function handleXGoodsSlash(interaction) {
   }
 
   if (sub === 'test') {
-    const ok = await ensureDeferred(interaction);
-    if (!ok) return; // 失効しているので何もしない
+    await ensureDeferred(interaction);
 
-    const result = await runXGoodsNotifier(interaction.client, { force: false, reason: 'manual_test' });
-    if (result?.notified) {
-      await interaction.editReply(`✅ テスト通知しました: ${result.tweetUrl}`);
-    } else {
-      await interaction.editReply(`ℹ️ テスト結果: ${JSON.stringify(result)}`);
+    let result;
+    try {
+      result = await runXGoodsNotifier(interaction.client, { force: false, reason: 'manual_test' });
+    } catch (e) {
+      result = { ok: false, error: true, message: e?.message || String(e) };
     }
+
+    if (result?.notified) {
+      await safeEditOrFollowUp(interaction, {
+        content: `✅ テスト通知しました: ${result.tweetUrl}`,
+        allowedMentions: { parse: [] },
+      });
+    } else {
+      await safeEditOrFollowUp(interaction, {
+        content: `ℹ️ テスト結果: ${JSON.stringify(result)}`,
+        allowedMentions: { parse: [] },
+      });
+    }
+
+    console.log('[xGoodsNotifier] manual_test result', result);
     return;
   }
 }
 
 async function handleXGoodsInteraction(interaction) {
-  // 今はスラッシュのみ
   await handleXGoodsSlash(interaction);
 }
 

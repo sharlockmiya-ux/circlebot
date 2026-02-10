@@ -16,8 +16,12 @@ function setupXGoodsNotifier(client) {
   cron.schedule(
     '35 6 * * *',
     async () => {
-      console.log('[xGoodsNotifier] cron tick');
-      await runXGoodsNotifier(client, { reason: 'cron' });
+      try {
+        await runXGoodsNotifier(client, { reason: 'cron' });
+      } catch (e) {
+        // notifier 側で基本握るが、万一の保険
+        console.error('[xGoodsNotifier] cron tick failed:', e?.message || e);
+      }
     },
     { timezone: 'Asia/Tokyo' },
   );
