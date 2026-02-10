@@ -5,13 +5,18 @@
     "enabled": true,
     "channelId": "1470635185442914399",
     "username": "zutapoke",
-    "keywordsAll": [],
-    "keywordsAny": [],
-    "minHourJst": 5,
-    "maxHourJst": 9,
-    "cronMaxResults": 5,
-    "testMaxResults": 25,
-    "excludeReplies": true
+    "keywordsAll": [
+      "業務連絡"
+    ],
+    "keywordsAny": [
+      "グッズ",
+      "予約",
+      "受注",
+      "販売"
+    ],
+    "minHourJst": 6,
+    "maxHourJst": 7,
+    "maxResults": 10
   },
   "channels": {
     "log": "1431975383242113066",

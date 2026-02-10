@@ -17,12 +17,9 @@ function defaultState() {
     lastNotifiedTweetId: null,
     lastNotifiedJstYmd: null,
     userIdCache: null, // username -> userId を1回だけ引くため
-
-    // 読み取り最小化のために追加:
-    // 直近の取得で「一番新しかったツイートID」。次回は since_id にして差分取得する。
-    lastSeenTweetId: null,
-    // 直近チェック日（JST, YYYY-MM-DD）。多重実行時の“同日再チェック”抑制に使える。
-    lastCheckedJstYmd: null,
+    lastFetchAtIso: null,
+    lastFetchJstYmd: null,
+    lastFetchResult: null,
   };
 }
 
@@ -70,24 +67,25 @@ function setEnabled(enabled) {
 }
 
 function setLastNotified(tweetId, jstYmd) {
-  return setState({
-    lastNotifiedTweetId: String(tweetId),
-    lastNotifiedJstYmd: String(jstYmd),
-  });
+  return setState({ lastNotifiedTweetId: String(tweetId), lastNotifiedJstYmd: String(jstYmd) });
+}
+
+
+function setLastFetch(jstYmd, result) {
+  try {
+    return setState({
+      lastFetchAtIso: new Date().toISOString(),
+      lastFetchJstYmd: jstYmd ? String(jstYmd) : null,
+      lastFetchResult: result ?? null,
+    });
+  } catch {
+    // noop
+    return null;
+  }
 }
 
 function setUserIdCache(userId) {
   return setState({ userIdCache: String(userId) });
-}
-
-function setLastSeenTweetId(tweetId) {
-  if (!tweetId) return getState();
-  return setState({ lastSeenTweetId: String(tweetId) });
-}
-
-function setLastCheckedJstYmd(jstYmd) {
-  if (!jstYmd) return getState();
-  return setState({ lastCheckedJstYmd: String(jstYmd) });
 }
 
 module.exports = {
@@ -96,7 +94,6 @@ module.exports = {
   setEnabled,
   setLastNotified,
   setUserIdCache,
-  setLastSeenTweetId,
-  setLastCheckedJstYmd,
+  setLastFetch,
   STATE_PATH,
 };

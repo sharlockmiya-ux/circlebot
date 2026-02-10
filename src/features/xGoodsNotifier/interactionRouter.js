@@ -1,11 +1,12 @@
 // src/features/xGoodsNotifier/interactionRouter.js
 // /xgoods コマンドで on/off と手動テスト
 
-const { PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits, MessageFlags } = require('discord.js');
 
 const { getXGoodsNotifierConfig } = require('./config');
-const { getState, setEnabled, STATE_PATH } = require('./stateStore');
+const { getState, setEnabled } = require('./stateStore');
 const { runXGoodsNotifier } = require('./notifier');
+const { STATE_PATH } = require('./stateStore');
 
 function hasManageGuild(interaction) {
   try {
@@ -13,6 +14,39 @@ function hasManageGuild(interaction) {
   } catch {
     return false;
   }
+}
+
+
+
+const EPHEMERAL = { flags: MessageFlags.Ephemeral };
+
+function stripEphemeral(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const { flags, ephemeral, ...rest } = payload;
+  return rest;
+}
+
+async function replyEphemeral(interaction, payload) {
+  const base = {
+    allowedMentions: { parse: [] },
+    ...payload,
+  };
+
+  if (interaction.deferred || interaction.replied) {
+    // 既にACK済みなら defer/reply を重ねない（40060 回避）
+    try {
+      return await interaction.editReply(stripEphemeral(base));
+    } catch {
+      return await interaction.followUp({ ...base, ...EPHEMERAL });
+    }
+  }
+
+  return await interaction.reply({ ...base, ...EPHEMERAL });
+}
+
+async function ensureDeferred(interaction) {
+  if (interaction.deferred || interaction.replied) return;
+  await interaction.deferReply({ ...EPHEMERAL });
 }
 
 function formatStatus() {
@@ -24,16 +58,8 @@ function formatStatus() {
     enabled,
     channelId: cfg.channelId,
     username: cfg.username,
-    cronMaxResults: cfg.cronMaxResults,
-    testMaxResults: cfg.testMaxResults,
-    excludeReplies: cfg.excludeReplies,
-
     lastNotifiedTweetId: st.lastNotifiedTweetId,
     lastNotifiedJstYmd: st.lastNotifiedJstYmd,
-
-    lastSeenTweetId: st.lastSeenTweetId,
-    lastCheckedJstYmd: st.lastCheckedJstYmd,
-
     statePath: STATE_PATH,
   };
 }
@@ -46,18 +72,13 @@ async function handleXGoodsSlash(interaction) {
   const st = formatStatus();
 
   if (sub === 'status') {
-    await interaction.reply({
-      ephemeral: true,
+    await replyEphemeral(interaction, {
       content:
         `**xGoods notifier**\n` +
         `- enabled: **${st.enabled ? 'ON' : 'OFF'}**\n` +
         `- username: @${st.username}\n` +
         `- channelId: ${st.channelId || '(unset)'}\n` +
-        `- readBudget(cron/test): ${st.cronMaxResults} / ${st.testMaxResults}\n` +
-        `- excludeReplies: ${st.excludeReplies ? 'true' : 'false'}\n` +
-        `- lastNotified: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
-        `- lastSeen: ${st.lastSeenTweetId || '-'}\n` +
-        `- lastChecked: ${st.lastCheckedJstYmd || '-'}\n` +
+        `- last: ${st.lastNotifiedJstYmd || '-'} / ${st.lastNotifiedTweetId || '-'}\n` +
         `- state: ${st.statePath}`,
       allowedMentions: { parse: [] },
     });
@@ -66,8 +87,7 @@ async function handleXGoodsSlash(interaction) {
 
   // ここから先は運営向け
   if (!hasManageGuild(interaction)) {
-    await interaction.reply({
-      ephemeral: true,
+    await replyEphemeral(interaction, {
       content: 'この操作には Manage Server 権限が必要です。',
     });
     return;
@@ -76,8 +96,7 @@ async function handleXGoodsSlash(interaction) {
   if (sub === 'on') {
     setEnabled(true);
     const after = formatStatus();
-    await interaction.reply({
-      ephemeral: true,
+    await replyEphemeral(interaction, {
       content: `✅ xGoods notifier を **ON** にしました（channel: ${after.channelId || '(unset)'}）`,
       allowedMentions: { parse: [] },
     });
@@ -86,8 +105,7 @@ async function handleXGoodsSlash(interaction) {
 
   if (sub === 'off') {
     setEnabled(false);
-    await interaction.reply({
-      ephemeral: true,
+    await replyEphemeral(interaction, {
       content: '🛑 xGoods notifier を **OFF** にしました。',
       allowedMentions: { parse: [] },
     });
@@ -95,21 +113,12 @@ async function handleXGoodsSlash(interaction) {
   }
 
   if (sub === 'test') {
-    await interaction.deferReply({ ephemeral: true });
-    const result = await runXGoodsNotifier(interaction.client, { force: true, reason: 'manual_test' });
+    await ensureDeferred(interaction);
+    const result = await runXGoodsNotifier(interaction.client, { force: false, reason: 'manual_test' });
     if (result?.notified) {
       await interaction.editReply(`✅ テスト通知しました: ${result.tweetUrl}`);
     } else {
-      // no_candidate のときは「読み取り最小化の都合で“直近のみ”読んでいる」可能性があるので補足
-      if (result?.why === 'no_candidate') {
-        await interaction.editReply(
-          `ℹ️ テスト結果: ${JSON.stringify(result)}\n` +
-            `※読み取り最小化のため、手動テストでも読み取り件数を制限しています。` +
-            ` 朝6:35の自動実行で拾えることを優先しています。`,
-        );
-      } else {
-        await interaction.editReply(`ℹ️ テスト結果: ${JSON.stringify(result)}`);
-      }
+      await interaction.editReply(`ℹ️ テスト結果: ${JSON.stringify(result)}`);
     }
     return;
   }

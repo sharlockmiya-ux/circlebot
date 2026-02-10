@@ -57,39 +57,27 @@ async function getUserIdByUsername(username, bearerToken) {
   return id;
 }
 
-/**
- * ユーザーの最新ツイートを取得
- *
- * @param {string} userId
- * @param {string} bearerToken
- * @param {object} opts
- * @param {number} [opts.maxResults=10] 返ってくる件数（=読み取り数）を抑えるため小さくする
- * @param {string|null} [opts.sinceId=null] これより新しいものだけ（差分取得）
- * @param {boolean} [opts.excludeReplies=true] 返信を除外するか
- */
 async function getLatestTweetsByUserId(
   userId,
   bearerToken,
-  { maxResults = 10, sinceId = null, excludeReplies = true } = {},
+  { maxResults = 10, startTimeIso = null, endTimeIso = null, sinceId = null, exclude = 'retweets' } = {},
 ) {
   // created_at と text だけで十分
-  const clamped = Math.max(5, Math.min(100, Number(maxResults) || 10));
-  const exclude = excludeReplies ? 'replies,retweets' : 'retweets';
-
   const params = new URLSearchParams({
     'tweet.fields': 'created_at,text',
-    exclude,
-    max_results: String(clamped),
+    max_results: String(Math.max(5, Math.min(100, maxResults))),
   });
-
-  if (sinceId) {
-    params.set('since_id', String(sinceId));
-  }
+  // retweet だけはノイズなので除外（reply は状況により必要なため除外しない）
+  if (exclude) params.set('exclude', String(exclude));
+  if (startTimeIso) params.set('start_time', String(startTimeIso));
+  if (endTimeIso) params.set('end_time', String(endTimeIso));
+  if (sinceId) params.set('since_id', String(sinceId));
 
   const url = `https://api.x.com/2/users/${encodeURIComponent(userId)}/tweets?${params.toString()}`;
   const data = await xFetchJson(url, bearerToken);
   return data?.data || [];
 }
+
 
 module.exports = {
   xFetchJson,

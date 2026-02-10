@@ -34,9 +34,30 @@ function getJstHour(date) {
   return Number(s);
 }
 
+
+function jstYmdToParts(ymd) {
+  const [y, m, d] = String(ymd || '').split('-').map((x) => Number(x));
+  if (!y || !m || !d) return null;
+  return { y, m, d };
+}
+
+/**
+ * JSTの「年月日+時分秒」を UTC ISO に変換する。
+ * 例: 2026-02-10 06:00 JST -> 2026-02-09T21:00:00.000Z
+ */
+function jstDateTimeToUtcIso(ymd, hour = 0, minute = 0, second = 0) {
+  const parts = jstYmdToParts(ymd);
+  if (!parts) return null;
+  const { y, m, d } = parts;
+  const utcMs = Date.UTC(y, m - 1, d, Number(hour) - 9, Number(minute), Number(second));
+  return new Date(utcMs).toISOString();
+}
+
+
 module.exports = {
   JST_TZ,
   formatJstYmd,
   formatJstHm,
   getJstHour,
+  jstDateTimeToUtcIso,
 };
