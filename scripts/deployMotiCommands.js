@@ -249,6 +249,18 @@ new SlashCommandBuilder()
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
 
+
+  // --- X グッズ締切まとめ通知（運営向け） ---
+  new SlashCommandBuilder()
+    .setName('xgoods')
+    .setDescription('Xの「本日締切グッズまとめ」投稿をDiscordへ通知する機能を操作します。')
+    .addSubcommand(sc => sc.setName('status').setDescription('現在の状態を表示します。'))
+    .addSubcommand(sc => sc.setName('on').setDescription('通知をONにします。'))
+    .addSubcommand(sc => sc.setName('off').setDescription('通知をOFFにします。'))
+    .addSubcommand(sc => sc.setName('test').setDescription('今すぐ取得してテスト通知します（強制）。'))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDMPermission(false),
+
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);

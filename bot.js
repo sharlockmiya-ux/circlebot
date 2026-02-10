@@ -446,6 +446,7 @@ const client = new Client({
 registerVoiceStateUpdate(client);
 
 const { setupMotiMonthlyReminder } = require('./src/features/moti/scheduler');
+const { setupXGoodsNotifier } = require('./src/features/xGoodsNotifier/scheduler');
 
 const { handleRoleButtonInteraction } = require('./src/features/roles/roleButtonHandler');
 // === ロールボタン設定（IDは config に集約）===
@@ -467,6 +468,8 @@ client.once(Events.ClientReady, async (clientReady) => {
   console.log(`✅ Logged in as ${clientReady.user.tag}`);
 
   setupMotiMonthlyReminder(client);
+
+  setupXGoodsNotifier(client);
   // v15: VCログ自動削除 + 起動時のVC元名確保（events側で集約）
   await onReadyVcInit(client);
 try {

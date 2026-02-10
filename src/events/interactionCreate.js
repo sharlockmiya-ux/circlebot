@@ -6,6 +6,7 @@ const { Events, MessageFlags } = require('discord.js');
 const { tryHandleRoleButtons } = require('../features/roles/interactionRouter');
 const { handleEmbedInteraction } = require('../features/embed/interactionRouter');
 const { handleMotiInteraction } = require('../features/moti/interactionRouter');
+const { handleXGoodsInteraction } = require('../features/xGoodsNotifier/interactionRouter');
 
 function registerInteractionCreate(client, ctx) {
   const { ROLE_BUTTONS, IDOL_ROLES } = ctx;
@@ -26,6 +27,9 @@ function registerInteractionCreate(client, ctx) {
 
       // ===== moti（スラッシュ/モーダル等） =====
       await handleMotiInteraction(interaction, { client, ...ctx });
+
+      // ===== X goods notifier（/xgoods） =====
+      await handleXGoodsInteraction(interaction, { client, ...ctx });
     } catch (err) {
       console.error('❌ InteractionCreate error:', err);
       // Discordの 50035 は details が重要なので、見える形で出す

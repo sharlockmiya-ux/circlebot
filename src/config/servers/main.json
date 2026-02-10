@@ -1,6 +1,15 @@
 {
   "name": "main",
   "guildId": "1431896098036781171",
+  "xGoodsNotifier": {
+    "enabled": true,
+    "channelId": "1470635185442914399",
+    "username": "zutapoke",
+    "keywordsAll": ["【業務連絡】", "締切"],
+    "keywordsAny": ["グッズ", "予約", "受注", "販売"],
+    "minHourJst": 5,
+    "maxHourJst": 9
+  },
   "channels": {
     "log": "1431975383242113066",  
     "rolepanel": "1433797341642489936",
