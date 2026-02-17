@@ -1,2 +1,5 @@
 .env
 node_modules
+desktop_app/output/
+desktop_app/logs/
+desktop_app/app/__pycache__/

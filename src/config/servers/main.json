@@ -42,6 +42,10 @@
       "memoArchive": "1432335666959745044"
     }
   },
+  "notify": {
+    "dmUserId": "",
+    "channelId": "1432388076256231516"
+  },
   "roles": {
     "announcement": "1435924112160587856",
     "engineer": "1435677519075610634",

@@ -6,21 +6,21 @@ try {
   console.warn('dns.setDefaultResultOrder failed:', e?.message || e);
 }
 
+// ① dotenv はここで1回だけ呼ぶ
+require('dotenv').config();
 
 // --- tiny health server for Render (moved to src/core) ---
 const { startHealthServer } = require('./src/core/healthServer');
 const { installProcessGuards } = require('./src/core/processGuards');
+const { createNotifyHandler } = require('./src/features/notify/httpNotifyHandler');
 
 installProcessGuards();
-startHealthServer(process.env.PORT || 10000);
+let client = null;
 // --- end tiny health server ---
 
 
 // ===== CircleBot (CommonJS) =====
 console.log("Boot: starting bot.js v3");
-
-// ① dotenv はここで1回だけ呼ぶ
-require('dotenv').config();
 
 // ② discord.js の import を「拡張」する
 const {
@@ -41,6 +41,14 @@ const {
 // ③ サーバー固有のIDは config から読む（移行・運用を簡単にするため）
 const { loadServerConfig } = require('./src/config');
 const cfg = loadServerConfig();
+
+const notifyHandler = createNotifyHandler({
+  getClient: () => client,
+  getNotifySecret: () => process.env.NOTIFY_SECRET,
+  getGuildId: () => cfg.guildId,
+  getNotifyChannelId: () => process.env.NOTIFY_CHANNEL_ID || cfg.notify?.channelId,
+});
+startHealthServer(process.env.PORT || 10000, { notifyHandler });
 
 
 
@@ -434,7 +442,7 @@ if (!TOKEN || !CHANNEL_ID) {
   process.exit(1);
 }
 
-const client = new Client({
+client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
