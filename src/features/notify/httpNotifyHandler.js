@@ -1,5 +1,5 @@
 const { URL } = require('url');
-const { EmbedBuilder, GatewayIntentBits } = require('discord.js');
+const { GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 const MAX_BODY_BYTES = 64 * 1024;
 const DEFAULT_NOTIFY_CHANNEL_ID = '1432388076256231516';
@@ -80,7 +80,7 @@ async function getGuild(client, guildId) {
   try {
     return await client.guilds.fetch(guildId);
   } catch (err) {
-    console.error('[notify] guild fetch failed:', err);
+    console.error('[notify] guild fetch failed');
     return null;
   }
 }
@@ -95,7 +95,7 @@ async function verifyGuildMember(guild, userId) {
     if (code === 10007) {
       return { ok: false, status: 403, error: 'not_guild_member' };
     }
-    console.error('[notify] member verify failed:', err);
+    console.error('[notify] member verify failed');
     return { ok: false, status: 503, error: 'member_verify_unavailable' };
   }
 }
@@ -110,36 +110,67 @@ function mapMember(member) {
   };
 }
 
-function buildNotifyEmbed(payload) {
-  const title = payload?.title || '✅ スクショ完了';
-  const mentionText = payload?.mentionUserId ? `<@${payload.mentionUserId}> ` : '';
-  const description = payload?.description
-    || `${mentionText}botが作業を終了しました`;
+function normalizeShots(rawShots) {
+  const value = Number(rawShots);
+  if (!Number.isFinite(value)) return null;
+  if (value < 0) return null;
+  return Math.floor(value);
+}
+
+function formatJstNow() {
+  try {
+    return new Date().toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      hour12: false,
+    });
+  } catch (_) {
+    return new Date().toISOString();
+  }
+}
+
+function pickErrorText(payload) {
+  const raw = (
+    payload?.error
+    || payload?.errorMessage
+    || payload?.reason
+    || payload?.message
+    || ''
+  );
+  const text = String(raw || '').trim();
+  if (!text) return '不明なエラー';
+  // Discord embed field value limit is 1024 chars. Keep some margin.
+  if (text.length <= 900) return text;
+  return `${text.slice(0, 900)}…`;
+}
+
+function composeNotifyPayload({ mentionUserId, shots, isError, errorText }) {
+  const mentionPrefix = mentionUserId ? `<@${mentionUserId}>` : '';
+  const statusValue = isError
+    ? `❌ エラー\n${errorText || '不明なエラー'}`
+    : '✅ 完了';
+  const shotsValue = Number.isFinite(shots) ? String(shots) : '—';
+  const timeValue = formatJstNow();
 
   const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor(0x2d8cff)
-    .setTimestamp();
+    .setTitle('自動スクショ通知')
+    .addFields(
+      { name: '状態', value: statusValue, inline: true },
+      { name: '枚数', value: shotsValue, inline: true },
+      { name: '完了時刻', value: timeValue, inline: true },
+    );
 
-  const fields = [];
-  if (Number.isFinite(payload?.shots)) fields.push({ name: 'shots', value: String(payload.shots), inline: true });
-  if (Number.isFinite(payload?.maxShots)) fields.push({ name: 'maxShots', value: String(payload.maxShots), inline: true });
-  if (payload?.templatePack) fields.push({ name: 'templatePack', value: String(payload.templatePack), inline: true });
-  if (payload?.outputDir) fields.push({ name: 'outputDir', value: String(payload.outputDir), inline: false });
-  if (payload?.savedTo) fields.push({ name: 'savedTo', value: String(payload.savedTo), inline: false });
-  if (payload?.startedAt) fields.push({ name: 'startedAt', value: String(payload.startedAt), inline: true });
-  if (payload?.finishedAt) fields.push({ name: 'finishedAt', value: String(payload.finishedAt), inline: true });
-  if (payload?.stopReason) fields.push({ name: 'stopReason', value: String(payload.stopReason), inline: true });
-  if (fields.length) embed.addFields(fields);
-  return embed;
+  return {
+    content: mentionPrefix
+      ? `${mentionPrefix} ${isError ? '自動スクショでエラーが発生しました。' : '自動スクショが終了しました。'}`
+      : `${isError ? '自動スクショでエラーが発生しました。' : '自動スクショが終了しました。'}`,
+    embeds: [embed],
+  };
 }
 
 function createNotifyHandler(options = {}) {
   const getClient = options.getClient || (() => null);
   const getNotifySecret = options.getNotifySecret || (() => '');
   const getGuildId = options.getGuildId || (() => '');
-  const getNotifyChannelId = options.getNotifyChannelId || (() => '');
 
   return async function notifyHandler(req, res) {
     const url = new URL(req.url || '/', 'http://localhost');
@@ -200,7 +231,7 @@ function createNotifyHandler(options = {}) {
           .slice(0, limit);
         writeJson(res, 200, { ok: true, members: items });
       } catch (err) {
-        console.error('[notify] members search failed:', err);
+        console.error('[notify] members search failed');
         writeJson(res, 200, { ok: false, reason: 'members_search_failed', members: [] });
       }
       return;
@@ -229,6 +260,24 @@ function createNotifyHandler(options = {}) {
       return;
     }
 
+    const eventType = String(payload?.eventType || '').trim().toLowerCase();
+    const status = String(payload?.status || '').trim().toLowerCase();
+    const isErrorEvent = eventType === 'error' || eventType === 'failed' || status === 'error' || status === 'failed';
+    const isOkEvent = eventType === 'max_shots' || eventType === 'finished' || eventType === 'done' || status === 'ok' || status === 'success' || status === 'complete';
+
+    if (!isOkEvent && !isErrorEvent) {
+      writeJson(res, 202, { ok: false, reason: 'ignored_event' });
+      return;
+    }
+
+    const shots = normalizeShots(payload?.shots);
+    if (isOkEvent && shots === null) {
+      writeJson(res, 400, { ok: false, reason: 'invalid_shots' });
+      return;
+    }
+
+    const errorText = isErrorEvent ? pickErrorText(payload) : '';
+
     const mentionUserId = String(payload?.mentionUserId || '').trim();
     if (mentionUserId) {
       const verify = await verifyGuildMember(guild, mentionUserId);
@@ -238,18 +287,13 @@ function createNotifyHandler(options = {}) {
       }
     }
 
-    const channelIdFromBody = String(payload?.channelId || '').trim();
-    const notifyChannelId = channelIdFromBody || String(getNotifyChannelId() || DEFAULT_NOTIFY_CHANNEL_ID).trim();
-    if (!notifyChannelId) {
-      writeJson(res, 503, { ok: false, reason: 'notify_channel_missing' });
-      return;
-    }
+    const notifyChannelId = DEFAULT_NOTIFY_CHANNEL_ID;
 
     let channel;
     try {
       channel = await client.channels.fetch(notifyChannelId);
     } catch (err) {
-      console.error('[notify] channel fetch failed:', err);
+      console.error('[notify] channel fetch failed');
       writeJson(res, 503, { ok: false, reason: 'notify_channel_unavailable' });
       return;
     }
@@ -260,17 +304,20 @@ function createNotifyHandler(options = {}) {
     }
 
     try {
-      const content = mentionUserId ? `<@${mentionUserId}>` : '';
-      const embed = buildNotifyEmbed({ ...payload, mentionUserId });
+      const notifyPayload = composeNotifyPayload({
+        mentionUserId,
+        shots,
+        isError: isErrorEvent,
+        errorText,
+      });
       const sent = await channel.send({
-        content,
-        embeds: [embed],
+        ...notifyPayload,
         allowedMentions: mentionUserId ? { users: [mentionUserId] } : { parse: [] },
       });
       console.log(`[notify] channel message sent ${sent.id} mention=${mentionUserId || 'none'}`);
       writeJson(res, 200, { ok: true, channelId: notifyChannelId, mentionUserId, messageId: sent.id });
     } catch (err) {
-      console.error('[notify] channel send failed:', err);
+      console.error('[notify] channel send failed');
       writeJson(res, 500, { ok: false, reason: 'channel_send_failed' });
     }
   };

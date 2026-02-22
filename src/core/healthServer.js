@@ -27,7 +27,7 @@ function startHealthServer(port, options = {}) {
       }
 
       Promise.resolve(notifyHandler(req, res)).catch((err) => {
-        console.error('[notify] unexpected error:', err);
+        console.error('[notify] unexpected error');
         if (res.writableEnded) return;
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: 'internal_error' }));
