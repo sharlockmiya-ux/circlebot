@@ -152,7 +152,8 @@ function composeNotifyPayload({ mentionUserId, shots, isError, errorText }) {
   const timeValue = formatJstNow();
 
   const embed = new EmbedBuilder()
-    .setTitle('自動スクショ通知')
+    .setTitle('➤通知')
+    .setColor("#01ccff")
     .addFields(
       { name: '状態', value: statusValue, inline: true },
       { name: '枚数', value: shotsValue, inline: true },
@@ -161,8 +162,8 @@ function composeNotifyPayload({ mentionUserId, shots, isError, errorText }) {
 
   return {
     content: mentionPrefix
-      ? `${mentionPrefix} ${isError ? '自動スクショでエラーが発生しました。' : '自動スクショが終了しました。'}`
-      : `${isError ? '自動スクショでエラーが発生しました。' : '自動スクショが終了しました。'}`,
+      ? `${mentionPrefix} ${isError ? '自動スクリーンショットでエラーが発生しました。' : '自動スクリーンショットが終了しました。'}`
+      : `${isError ? '自動スクリーンショットでエラーが発生しました。' : '自動スクリーンショットが終了しました。'}`,
     embeds: [embed],
   };
 }
