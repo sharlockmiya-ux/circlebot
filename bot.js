@@ -110,34 +110,37 @@ console.log(
 
 const https = require('https');
 
-function ping(url, opts = {}) {
-  return new Promise((resolve) => {
-    const req = https.request(url, opts, (res) => {
-      console.log(`[net] ${url} -> ${res.statusCode}`);
-      res.resume();
-      resolve();
-    });
-    req.on('error', (e) => {
-      console.error(`[net] ${url} error:`, e?.message || e);
-      resolve();
-    });
-    req.setTimeout(10000, () => {
-      console.error(`[net] ${url} timeout`);
-      req.destroy();
-      resolve();
-    });
-    req.end();
-  });
-}
 
-// ① Discord自体に到達できるか（トークン不要）
-ping('https://discord.com/api/v10/gateway');
+// ===== 任意のネット診断（通常はOFF）=====
+if (process.env.NET_DIAG === '1') {
+  const https = require('https');
 
-// ② トークンがAPI的に通るか（トークン内容は出さない）
-if (TOKEN) {
-  ping('https://discord.com/api/v10/users/@me', {
-    headers: { Authorization: `Bot ${TOKEN}` },
-  });
+  function ping(url, opts = {}) {
+    return new Promise((resolve) => {
+      const req = https.request(url, opts, (res) => {
+        console.log(`[net] ${url} -> ${res.statusCode} retry-after=${res.headers['retry-after'] || ''}`);
+        res.resume();
+        resolve();
+      });
+      req.on('error', (e) => {
+        console.error(`[net] ${url} error:`, e?.message || e);
+        resolve();
+      });
+      req.setTimeout(10000, () => {
+        console.error(`[net] ${url} timeout`);
+        req.destroy();
+        resolve();
+      });
+      req.end();
+    });
+  }
+
+  // トークン確認だけ（必要な時だけ）
+  if (process.env.DISCORD_TOKEN) {
+    ping('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` },
+    });
+  }
 }
 
 
