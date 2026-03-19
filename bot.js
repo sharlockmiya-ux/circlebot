@@ -454,12 +454,16 @@ client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,  // 👈 これを追加
   ],
+  rest: {
+    rejectOnRateLimit: () => true,   // 429時に自動待機せず即エラーにする
+  },
 });
 
 // === レートリミット情報をログ出力（429調査用） ===
 client.rest.on('rateLimited', (info) => {
-  console.warn(
-    `[rate-limit] ${info.method} ${info.url} | retryAfter=${info.retryAfter}ms global=${info.global} limit=${info.limit}`
+  const sec = Math.ceil(info.retryAfter / 1000);
+  console.error(
+    `[rate-limit] 429: あと${sec}秒待つ必要があります | ${info.method} ${info.url} | global=${info.global}`
   );
 });
 
@@ -821,21 +825,14 @@ registerInteractionCreate(client, {
 
 
 
-// ===== Botログイン（バックオフリトライ付き） =====
-(async function loginWithBackoff() {
-  const maxRetries = 3;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      await client.login(TOKEN);
-      return; // 成功
-    } catch (err) {
-      const wait = (i + 1) * 30;
-      console.error(`❌ ログイン失敗 (${i + 1}/${maxRetries}): ${err.message} — ${wait}秒後にリトライ`);
-      if (i < maxRetries - 1) {
-        await new Promise(r => setTimeout(r, wait * 1000));
-      }
-    }
+// ===== Botログイン =====
+client.login(TOKEN).catch(err => {
+  // RateLimitError の場合は retry-after を表示
+  if (err.retryAfter) {
+    const sec = Math.ceil(err.retryAfter / 1000);
+    console.error(`❌ ログイン失敗: 429レートリミット — あと${sec}秒後に再デプロイしてください`);
+  } else {
+    console.error(`❌ ログイン失敗:`, err.message || err);
   }
-  console.error('❌ ログイン完全失敗。プロセスを終了します。');
   process.exit(1);
-})();
+});
