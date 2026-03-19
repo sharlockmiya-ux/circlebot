@@ -135,15 +135,16 @@ function ping(url, opts = {}) {
   });
 }
 
-// ① Discord自体に到達できるか（トークン不要）
-ping('https://discord.com/api/v10/gateway');
+// ① Discord疎通確認ping — 無効化（discord.js管理外のリクエストが429をエスカレートさせるため）
+// client.rest.on('rateLimited') と loginWithBackoff で同等以上の監視ができる
+// ping('https://discord.com/api/v10/gateway');
 
-// ② トークンがAPI的に通るか（トークン内容は出さない）
-if (TOKEN) {
-  ping('https://discord.com/api/v10/users/@me', {
-    headers: { Authorization: `Bot ${TOKEN}` },
-  });
-}
+// ② トークン疎通確認ping — 同上
+// if (TOKEN) {
+//   ping('https://discord.com/api/v10/users/@me', {
+//     headers: { Authorization: `Bot ${TOKEN}` },
+//   });
+// }
 
 
 
