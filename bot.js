@@ -113,7 +113,12 @@ const https = require('https');
 function ping(url, opts = {}) {
   return new Promise((resolve) => {
     const req = https.request(url, opts, (res) => {
-      console.log(`[net] ${url} -> ${res.statusCode}`);
+      const retryAfter = res.headers['retry-after'];
+      if (res.statusCode === 429 && retryAfter) {
+        console.warn(`[net] ${url} -> 429 (retry-after: ${retryAfter}秒)`);
+      } else {
+        console.log(`[net] ${url} -> ${res.statusCode}`);
+      }
       res.resume();
       resolve();
     });
@@ -448,6 +453,13 @@ client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,  // 👈 これを追加
   ],
+});
+
+// === レートリミット情報をログ出力（429調査用） ===
+client.rest.on('rateLimited', (info) => {
+  console.warn(
+    `[rate-limit] ${info.method} ${info.url} | retryAfter=${info.retryAfter}ms global=${info.global} limit=${info.limit}`
+  );
 });
 
 // v15: VC監視は events/voiceStateUpdate へ分離
@@ -808,7 +820,21 @@ registerInteractionCreate(client, {
 
 
 
-// ===== Botログイン =====
-client.login(TOKEN).catch(err => {
-  console.error("❌ ログイン失敗:", err);
-});
+// ===== Botログイン（バックオフリトライ付き） =====
+(async function loginWithBackoff() {
+  const maxRetries = 3;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await client.login(TOKEN);
+      return; // 成功
+    } catch (err) {
+      const wait = (i + 1) * 30;
+      console.error(`❌ ログイン失敗 (${i + 1}/${maxRetries}): ${err.message} — ${wait}秒後にリトライ`);
+      if (i < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, wait * 1000));
+      }
+    }
+  }
+  console.error('❌ ログイン完全失敗。プロセスを終了します。');
+  process.exit(1);
+})();

@@ -94,6 +94,9 @@ async function cleanupOldVcLogs(client) {
       await channel.bulkDelete(targets, true);
       console.log(`🧹 VCログ自動削除: ${targets.size}件削除しました`);
 
+      // レートリミット回避のため2秒待機
+      await new Promise(r => setTimeout(r, 2000));
+
       // 100件以上古いメッセージがある場合は、もう一度ループ
     } while (fetched.size === 100);
   } catch (err) {
