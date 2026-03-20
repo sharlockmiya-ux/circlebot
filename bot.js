@@ -825,14 +825,25 @@ registerInteractionCreate(client, {
 
 
 
-// ===== Botログイン =====
-client.login(TOKEN).catch(err => {
-  // RateLimitError の場合は retry-after を表示
-  if (err.retryAfter) {
-    const sec = Math.ceil(err.retryAfter / 1000);
-    console.error(`❌ ログイン失敗: 429レートリミット — あと${sec}秒後に再デプロイしてください`);
-  } else {
-    console.error(`❌ ログイン失敗:`, err.message || err);
+// ===== Botログイン（429時はretry-after待機して自動リトライ） =====
+(async function loginWithRetry() {
+  const maxRetries = 5;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await client.login(TOKEN);
+      return; // 成功
+    } catch (err) {
+      if (err.retryAfter) {
+        const sec = Math.ceil(err.retryAfter / 1000);
+        console.error(`❌ ログイン失敗: 429レートリミット — ${sec}秒後に自動リトライします (${i + 1}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, (sec + 10) * 1000));
+      } else {
+        const wait = (i + 1) * 30;
+        console.error(`❌ ログイン失敗 (${i + 1}/${maxRetries}): ${err.message} — ${wait}秒後にリトライ`);
+        await new Promise(r => setTimeout(r, wait * 1000));
+      }
+    }
   }
-  process.exit(1);
-});
+  console.error('❌ ログイン完全失敗。ヘルスサーバーは維持します。');
+  // process.exit(1) しない → Renderの再起動ループを防止
+})();
