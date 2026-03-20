@@ -825,25 +825,25 @@ registerInteractionCreate(client, {
 
 
 
-// ===== Botログイン（429時はretry-after待機して自動リトライ） =====
-(async function loginWithRetry() {
-  const maxRetries = 5;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      await client.login(TOKEN);
-      return; // 成功
-    } catch (err) {
-      if (err.retryAfter) {
-        const sec = Math.ceil(err.retryAfter / 1000);
-        console.error(`❌ ログイン失敗: 429レートリミット — ${sec}秒後に自動リトライします (${i + 1}/${maxRetries})`);
-        await new Promise(r => setTimeout(r, (sec + 10) * 1000));
-      } else {
-        const wait = (i + 1) * 30;
-        console.error(`❌ ログイン失敗 (${i + 1}/${maxRetries}): ${err.message} — ${wait}秒後にリトライ`);
-        await new Promise(r => setTimeout(r, wait * 1000));
-      }
-    }
+// ===== Botログイン =====
+// 環境変数 LOGIN_DELAY_SEC が設定されている場合、その秒数だけ待ってからログインする
+// （429レートリミット解除待ちに使用。解除後は環境変数を削除して再デプロイ）
+(async function loginWithDelay() {
+  const delaySec = parseInt(process.env.LOGIN_DELAY_SEC, 10);
+  if (delaySec > 0) {
+    console.log(`⏳ LOGIN_DELAY_SEC=${delaySec} — ${delaySec}秒後にログインを試みます（${new Date(Date.now() + delaySec * 1000).toISOString()}頃）`);
+    await new Promise(r => setTimeout(r, delaySec * 1000));
   }
-  console.error('❌ ログイン完全失敗。ヘルスサーバーは維持します。');
-  // process.exit(1) しない → Renderの再起動ループを防止
+  try {
+    await client.login(TOKEN);
+  } catch (err) {
+    if (err.retryAfter) {
+      const sec = Math.ceil(err.retryAfter / 1000);
+      console.error(`❌ ログイン失敗: 429レートリミット — あと${sec}秒の制限が残っています`);
+      console.error(`💡 RenderのEnvironmentに LOGIN_DELAY_SEC=${sec + 60} を設定して再デプロイしてください`);
+    } else {
+      console.error(`❌ ログイン失敗:`, err.message || err);
+    }
+    console.error('ヘルスサーバーは維持します。');
+  }
 })();

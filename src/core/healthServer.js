@@ -2,6 +2,14 @@
 const http = require('http');
 const { URL } = require('url');
 
+// Render無料プランのスリープ防止: 自分自身のヘルスエンドポイントを定期的に叩く
+function startSelfPing(port) {
+  const interval = 5 * 60 * 1000; // 5分ごと
+  setInterval(() => {
+    http.get(`http://localhost:${port}/health`, () => {}).on('error', () => {});
+  }, interval);
+}
+
 function startHealthServer(port, options = {}) {
   const PORT = port || process.env.PORT || 10000;
   const notifyHandler = options.notifyHandler;
@@ -37,7 +45,10 @@ function startHealthServer(port, options = {}) {
 
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
-  }).listen(PORT, () => console.log(`✅ Health server on ${PORT}`));
+  }).listen(PORT, () => {
+    console.log(`✅ Health server on ${PORT}`);
+    startSelfPing(PORT);
+  });
 }
 
 module.exports = { startHealthServer };
