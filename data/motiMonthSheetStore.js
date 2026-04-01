@@ -28,6 +28,12 @@ function createSheetsClient() {
   return google.sheets({ version: 'v4', auth });
 }
 
+// Google Sheets API の FORMATTED_VALUE はカンマ付き文字列を返すため除去してパース
+function parseSheetNum(v) {
+  if (v === undefined || v === null || v === '') return NaN;
+  return Number(String(v).replace(/,/g, ''));
+}
+
 // 1行をオブジェクトに変換（ヘッダー行は呼ばない想定）
 function rowToMonthlyRecord(row) {
   // 旧: A:F = userId, username, timestamp, monthKey, grow, fans
@@ -46,11 +52,11 @@ function rowToMonthlyRecord(row) {
     username: username || '',
     timestamp: ts,
     monthKey: mk,
-    grow: Number(grow) || 0,
-    fans: Number(fans) || 0,
-    // 新列（存在しない旧データでは undefined になる）
-    growTotal: growTotal === undefined ? undefined : (Number(growTotal) || 0),
-    fansTotal: fansTotal === undefined ? undefined : (Number(fansTotal) || 0),
+    grow: parseSheetNum(grow) || 0,
+    fans: parseSheetNum(fans) || 0,
+    // 新列（存在しない旧データでは undefined になる。空文字列も undefined 扱い）
+    growTotal: (growTotal === undefined || growTotal === '') ? undefined : (parseSheetNum(growTotal) || 0),
+    fansTotal: (fansTotal === undefined || fansTotal === '') ? undefined : (parseSheetNum(fansTotal) || 0),
   };
 }
 

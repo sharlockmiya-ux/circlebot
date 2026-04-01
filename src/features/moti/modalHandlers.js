@@ -223,11 +223,24 @@ async function handleMotiModalSubmit(interaction, ctx) {
             return n < targetMonthNum;
           });
 
-          // grow: 旧データは diff 保存（grow の合計で累計が復元できる）
-          const previousTotal = previousRecords.reduce(
-            (sum, r) => sum + (r.grow || 0),
-            0,
+          // ===== 前月レコードを monthKey 昇順にソート =====
+          const sortedPrev = previousRecords.slice().sort((a, b) => {
+            const na = toMonthNum(a.monthKey) || 0;
+            const nb = toMonthNum(b.monthKey) || 0;
+            if (na !== nb) return na - nb;
+            return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
+          });
+
+          // grow: growTotal があればそれを優先。なければ旧方式（grow diff 合計で累計復元）。
+          let previousTotal = 0;
+          const withGrowTotal = sortedPrev.filter(
+            (r) => typeof r.growTotal === 'number' && !Number.isNaN(r.growTotal),
           );
+          if (withGrowTotal.length > 0) {
+            previousTotal = withGrowTotal[withGrowTotal.length - 1].growTotal || 0;
+          } else {
+            previousTotal = sortedPrev.reduce((sum, r) => sum + (r.grow || 0), 0);
+          }
 
           const diff = currentTotal - previousTotal;
 
@@ -243,12 +256,6 @@ async function handleMotiModalSubmit(interaction, ctx) {
 
           // fans: 新列（fansTotal）があればそれを優先。なければ旧列（fans）を「実累計」とみなす。
           let previousFansTotal = 0;
-          const sortedPrev = previousRecords.slice().sort((a, b) => {
-            const na = toMonthNum(a.monthKey) || 0;
-            const nb = toMonthNum(b.monthKey) || 0;
-            if (na !== nb) return na - nb;
-            return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
-          });
 
           const withFansTotal = sortedPrev.filter((r) => typeof r.fansTotal === 'number' && !Number.isNaN(r.fansTotal));
           if (withFansTotal.length > 0) {
